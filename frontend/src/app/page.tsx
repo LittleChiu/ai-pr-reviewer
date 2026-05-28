@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Confidence, ReviewReport, Severity } from "@/lib/types";
 import { ApiCallError, reviewPR } from "@/lib/api";
+import { HealthBadge } from "@/components/HealthBadge";
 
 const SEVERITY_STYLES: Record<Severity, string> = {
   high: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900",
@@ -47,11 +48,14 @@ export default function Home() {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <div className="mx-auto max-w-4xl px-6 py-12">
         <header className="mb-12">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="text-3xl">🤖</div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              AI PR Review
-            </h1>
+          <div className="flex items-start justify-between gap-4 mb-3">
+            <div className="flex items-center gap-3">
+              <div className="text-3xl">🤖</div>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                AI PR Review
+              </h1>
+            </div>
+            <HealthBadge />
           </div>
           <p className="text-zinc-600 dark:text-zinc-400 text-sm">
             粘贴 GitHub PR 链接,几秒钟拿到一份带置信度的智能评审报告。
