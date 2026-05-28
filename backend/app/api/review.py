@@ -6,6 +6,11 @@
 
 另外提供 /api/review/stream:同样是 layered,但用 SSE 流式返回每阶段事件,
 让前端可以先看到 summary,再看到 risks 一条条到达。
+
+缓存:
+- 非流式 /api/review 命中缓存(repo + head_sha + strategy + model)直接返回
+- /api/review/stream 命中时直接 yield 一个完整的 cached 事件 + done,不重跑 LLM
+- ?force_refresh=true 跳过缓存
 """
 
 from __future__ import annotations
@@ -19,6 +24,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.core.config import get_settings
+from app.services.cache import ReviewCache, get_cache
 from app.services.github_client import (
     GitHubClient,
     GitHubError,
@@ -26,7 +33,7 @@ from app.services.github_client import (
     RateLimitedError,
 )
 from app.services.llm_client import LLMError
-from app.services.pr_url import parse_pr_url
+from app.services.pr_url import PRRef, parse_pr_url
 from app.services.review_schema import ReviewReport
 from app.services.reviewer import review_pr
 from app.services.reviewer_layered import (
@@ -45,10 +52,16 @@ class ReviewRequest(BaseModel):
     url: str
     model: str | None = None
     strategy: Strategy = "layered"
+    force_refresh: bool = False
+
+
+def _cache_key(ref: PRRef, head_sha: str, strategy: str, model: str) -> str:
+    return ReviewCache.make_key(ref.owner, ref.repo, ref.number, head_sha, strategy, model)
 
 
 @router.post("/review", response_model=ReviewReport)
 async def review(req: ReviewRequest) -> ReviewReport:
+    s = get_settings()
     try:
         ref = parse_pr_url(req.url)
     except ValueError as e:
@@ -57,17 +70,26 @@ async def review(req: ReviewRequest) -> ReviewReport:
     try:
         async with GitHubClient() as gh:
             bundle = await gh.fetch_pr_bundle(ref)
+            model = req.model or s.primary_model
+            key = _cache_key(ref, bundle.metadata.head_sha, req.strategy, model)
+
+            if s.cache_enabled and not req.force_refresh:
+                cached = get_cache().get(key)
+                if cached:
+                    logger.info("cache hit: %s", key)
+                    return ReviewReport(**cached)
+
             try:
                 if req.strategy == "single":
-                    return await review_pr(bundle, primary_model=req.model)
-                return await review_pr_layered(
-                    bundle,
-                    ref=ref,
-                    gh=gh,
-                    primary_model=req.model,
-                )
+                    report = await review_pr(bundle, primary_model=model)
+                else:
+                    report = await review_pr_layered(bundle, ref=ref, gh=gh, primary_model=model)
             except LLMError as e:
                 raise HTTPException(status_code=503, detail=f"LLM: {e}") from e
+
+            if s.cache_enabled:
+                get_cache().set(key, report.model_dump())
+            return report
     except PRNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except RateLimitedError as e:
@@ -85,7 +107,10 @@ def _sse(event: ReviewEvent) -> str:
 async def review_stream(req: ReviewRequest) -> StreamingResponse:
     """SSE 流式评审(始终 layered)。每阶段一个事件:
     started → triage → file_started × N → file_done × N → done
+
+    缓存命中时:started → cached → done(瞬时返回完整报告)
     """
+    s = get_settings()
     try:
         ref = parse_pr_url(req.url)
     except ValueError as e:
@@ -102,10 +127,41 @@ async def review_stream(req: ReviewRequest) -> StreamingResponse:
                 except (RateLimitedError, GitHubError) as e:
                     yield _sse(ReviewEvent("error", {"stage": "fetch", "message": str(e)}))
                     return
+
+                model = req.model or s.primary_model
+                key = _cache_key(ref, bundle.metadata.head_sha, "layered", model)
+
+                if s.cache_enabled and not req.force_refresh:
+                    cached = get_cache().get(key)
+                    if cached:
+                        yield _sse(
+                            ReviewEvent(
+                                "started",
+                                {
+                                    "pr": f"{ref.owner}/{ref.repo}#{ref.number}",
+                                    "title": bundle.metadata.title,
+                                    "files": bundle.metadata.changed_files,
+                                    "additions": bundle.metadata.additions,
+                                    "deletions": bundle.metadata.deletions,
+                                    "model": model,
+                                    "from_cache": True,
+                                },
+                            )
+                        )
+                        yield _sse(ReviewEvent("cached", cached))
+                        yield _sse(ReviewEvent("done", cached))
+                        return
+
+                final_payload: dict | None = None
                 async for ev in review_pr_layered_stream(
-                    bundle, ref=ref, gh=gh, primary_model=req.model
+                    bundle, ref=ref, gh=gh, primary_model=model
                 ):
+                    if ev.type == "done":
+                        final_payload = ev.data
                     yield _sse(ev)
+
+                if s.cache_enabled and final_payload:
+                    get_cache().set(key, final_payload)
         except LLMError as e:
             yield _sse(ReviewEvent("error", {"stage": "llm", "message": str(e)}))
         except Exception as e:
@@ -121,3 +177,14 @@ async def review_stream(req: ReviewRequest) -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get("/review/cache/stats")
+async def cache_stats() -> dict:
+    return get_cache().stats()
+
+
+@router.delete("/review/cache")
+async def cache_clear() -> dict:
+    n = get_cache().clear()
+    return {"cleared": n}
