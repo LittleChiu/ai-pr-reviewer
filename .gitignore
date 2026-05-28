@@ -59,3 +59,7 @@ tmp/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# 私人开发记录(不进仓库)
+PROGRESS.md
+BLOCKERS.md
