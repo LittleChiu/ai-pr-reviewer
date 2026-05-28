@@ -23,11 +23,6 @@ cd backend
 uv sync
 cp ../.env.example .env  # 填入 OPENAI_API_KEY
 uv run uvicorn app.main:app --reload --port 8000
-
-# 国内网络若需通过代理访问 api.github.com:
-HTTP_PROXY=<your-proxy> HTTPS_PROXY=<your-proxy> \
-  NO_PROXY=localhost,127.0.0.1 \
-  uv run uvicorn app.main:app --reload --port 8000
 ```
 
 前端:
@@ -50,7 +45,7 @@ pnpm dev
 
 ### 后端 → 自建 + Cloudflare Tunnel
 
-后端运行在自建服务器,通过 Cloudflare Tunnel 暴露公网域名,免开端口、自带 HTTPS:
+后端运行在自建服务器上,通过 Cloudflare Tunnel 暴露公网域名,免开端口、自带 HTTPS:
 
 ```bash
 # 1. 安装 cloudflared

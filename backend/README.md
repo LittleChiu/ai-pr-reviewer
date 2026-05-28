@@ -10,14 +10,6 @@ cp ../.env.example .env  # 编辑填入 OPENAI_API_KEY
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-> 国内网络环境若需通过代理访问 `api.github.com`,启动时显式带上代理:
->
-> ```bash
-> HTTP_PROXY=<your-proxy> HTTPS_PROXY=<your-proxy> \
->   NO_PROXY=localhost,127.0.0.1 \
->   uv run uvicorn app.main:app --port 8000
-> ```
-
 健康检查: <http://localhost:8000/api/health>
 
 ## 端点

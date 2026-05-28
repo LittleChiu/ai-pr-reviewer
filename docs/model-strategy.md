@@ -41,7 +41,7 @@
 
 ### \`gemini-3.1-flash-lite\` 当视觉
 - 多模态原生支持(图片 + 文字)
-- 当前 yorhamc 上**已实测可用**(其它 gemini-3.1 视觉模型如 \`flash-image\` 网关侧未配置价格,见 BLOCKERS.md)
+- 当前 yorhamc 上**已实测可用**(其它 gemini-3.1 视觉模型如 `flash-image` 网关侧未配置价格,激活后启用)
 - 视觉是可选 feature,不阻塞主路
 
 ### \`claude-sonnet-4-6\` 当兜底

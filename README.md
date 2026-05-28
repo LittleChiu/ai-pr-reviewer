@@ -66,8 +66,6 @@ pnpm dev
 
 打开 <http://localhost:3000>。
 
-> **国内网络代理提示**：若需通过代理访问 `api.github.com`，启动后端时显式带 `HTTP_PROXY=<your-proxy>` 等环境变量。详见 [docs/deploy.md](./docs/deploy.md)。
-
 ## 🧠 模型选择思路
 
 四档分工，OpenAI 兼容协议下任意切换（详见 [docs/model-strategy.md](./docs/model-strategy.md)）：
@@ -111,9 +109,7 @@ ai-pr-reviewer/
 │   ├── model-strategy.md   # 模型选择 / 上下文 / 扩展方向
 │   └── deploy.md           # 本地与生产部署
 ├── scripts/dev.sh          # 一键启动
-├── PLAN.md                 # 方案文档(开发前提交,72h 全程参照)
-├── PROGRESS.md             # 开发进度日志(commit 时间分布证据)
-└── BLOCKERS.md             # 阻塞与已决议项
+└── PLAN.md                 # 方案文档(开发前提交,72h 全程参照)
 ```
 
 ## 🛣️ 未来扩展方向
