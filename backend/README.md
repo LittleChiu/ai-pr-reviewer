@@ -28,6 +28,10 @@ uv run uvicorn app.main:app --reload --port 8000
 
   请求体: `{"url": "<PR_URL>", "include_diff": true, "max_files": 300}`
 
+- `POST /api/review` — 对指定 PR 出评审报告(summary + highlights + risks + suggestions)
+
+  请求体: `{"url": "<PR_URL>", "model": "deepseek-v4-pro-max"}`(model 可省略,使用 PRIMARY_MODEL)
+
 ## 测试
 
 ```bash

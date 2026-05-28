@@ -20,7 +20,8 @@
 |---|---|---|---|
 | _init_ | 仓库骨架 | ✅ main | README + 配置文件 |
 | #1 | feat(backend): FastAPI 骨架与 /api/health | ✅ merged | 后端服务起点,CI 跑通 |
-| #2 | feat(backend): GitHub PR 数据获取 | 🚧 开发中 | URL 解析 + httpx 客户端 + /api/pr/{parse,fetch} |
+| #2 | feat(backend): GitHub PR 数据获取 | ✅ merged | URL 解析 + httpx 客户端 + /api/pr/{parse,fetch} |
+| #3 | feat(backend): LLM 评审核心 | 🚧 开发中 | OpenAI SDK 封装 + reviewer + /api/review |
 
 ## 关键决策
 
