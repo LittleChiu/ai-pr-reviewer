@@ -25,6 +25,13 @@ export interface Suggestion {
   confidence: Confidence;
 }
 
+export interface TokenUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  llm_calls: number;
+}
+
 export interface ReviewReport {
   summary: string;
   highlights: string[];
@@ -32,6 +39,7 @@ export interface ReviewReport {
   suggestions: Suggestion[];
   model: string;
   elapsed_ms: number;
+  token_usage: TokenUsage;
 }
 
 export interface ApiError {

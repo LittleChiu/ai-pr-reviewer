@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from openai import APIError, AsyncOpenAI
 
@@ -22,9 +22,24 @@ class LLMError(Exception):
 
 
 @dataclass
+class TokenUsage:
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    llm_calls: int = 0
+
+    def add(self, other: TokenUsage) -> None:
+        self.prompt_tokens += other.prompt_tokens
+        self.completion_tokens += other.completion_tokens
+        self.total_tokens += other.total_tokens
+        self.llm_calls += other.llm_calls
+
+
+@dataclass
 class LLMResponse:
     content: str
     model: str
+    usage: TokenUsage = field(default_factory=TokenUsage)
 
 
 class LLMClient:
@@ -68,7 +83,13 @@ class LLMClient:
                 content = (resp.choices[0].message.content or "").strip()
                 if not content:
                     raise LLMError(f"模型 {model} 返回空内容")
-                return LLMResponse(content=content, model=model)
+                usage = TokenUsage()
+                if resp.usage is not None:
+                    usage.prompt_tokens = resp.usage.prompt_tokens or 0
+                    usage.completion_tokens = resp.usage.completion_tokens or 0
+                    usage.total_tokens = resp.usage.total_tokens or 0
+                usage.llm_calls = 1
+                return LLMResponse(content=content, model=model, usage=usage)
             except (APIError, LLMError) as e:
                 logger.warning("LLM model %s failed: %s", model, e)
                 last_error = e

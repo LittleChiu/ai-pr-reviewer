@@ -257,8 +257,16 @@ function StreamView({ state, loading }: { state: StreamState; loading: boolean }
       )}
 
       {state.finalReport && (
-        <div className="text-xs text-zinc-400 dark:text-zinc-500 text-center pt-4">
-          ✓ 完成 · 总计耗时 {state.finalReport.elapsed_ms} ms
+        <div className="text-xs text-zinc-400 dark:text-zinc-500 text-center pt-4 space-y-1">
+          <div>✓ 完成 · 总计耗时 {state.finalReport.elapsed_ms} ms</div>
+          {state.finalReport.token_usage && (
+            <div>
+              {state.finalReport.token_usage.llm_calls} 次 LLM 调用 ·{" "}
+              {state.finalReport.token_usage.prompt_tokens.toLocaleString()} prompt +{" "}
+              {state.finalReport.token_usage.completion_tokens.toLocaleString()} completion ={" "}
+              {state.finalReport.token_usage.total_tokens.toLocaleString()} tokens
+            </div>
+          )}
         </div>
       )}
 
