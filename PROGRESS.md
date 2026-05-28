@@ -11,12 +11,16 @@
 - **00:06** PLAN.md 落盘,完成方案构思
 - **00:07** GitHub 仓库 `LittleChiu/ai-pr-reviewer` 创建
 - **00:08** 初始化 README / .gitignore / LICENSE / .env.example / PROGRESS.md
+- **00:14** PR #1 合并:FastAPI 骨架,CI 跑通(中途遇到 `defaults.working-directory` 在目录不存在时 GHA 无法启动 step,改为各步骤显式声明修复)
+- **00:14** 进入 PR #2:GitHub PR 数据获取
 
 ## PR 列表
 
 | # | 标题 | 状态 | 说明 |
 |---|---|---|---|
-| _init_ | 仓库骨架 | ✅ main | README + 配置文件,直推 main(此为 init,后续全走 PR) |
+| _init_ | 仓库骨架 | ✅ main | README + 配置文件 |
+| #1 | feat(backend): FastAPI 骨架与 /api/health | ✅ merged | 后端服务起点,CI 跑通 |
+| #2 | feat(backend): GitHub PR 数据获取 | 🚧 开发中 | URL 解析 + httpx 客户端 + /api/pr/{parse,fetch} |
 
 ## 关键决策
 
