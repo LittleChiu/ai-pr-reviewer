@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     ]
     cors_origin_regex: str | None = None
 
+    cache_enabled: bool = True
+    cache_db_path: str = "./data/cache.db"
+
 
 @lru_cache
 def get_settings() -> Settings:
