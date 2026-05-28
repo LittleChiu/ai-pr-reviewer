@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.services.github_schema import PRBundle
 from app.services.llm_client import LLMClient, extract_json
 from app.services.review_schema import ReviewReport
+from app.services.review_schema import TokenUsage as ReportTokenUsage
 
 SYSTEM_PROMPT = """你是一位资深的代码评审专家,擅长 Python/TypeScript/Go 等主流语言。
 你的任务是评审一个 GitHub Pull Request,产出一份高质量、低噪声的评审报告。
@@ -110,4 +111,10 @@ async def review_pr(
     report = ReviewReport(**data)
     report.model = resp.model
     report.elapsed_ms = int((time.time() - t0) * 1000)
+    report.token_usage = ReportTokenUsage(
+        prompt_tokens=resp.usage.prompt_tokens,
+        completion_tokens=resp.usage.completion_tokens,
+        total_tokens=resp.usage.total_tokens,
+        llm_calls=1,
+    )
     return report

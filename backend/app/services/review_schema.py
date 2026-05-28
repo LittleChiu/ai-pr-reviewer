@@ -32,6 +32,13 @@ class Suggestion(BaseModel):
     confidence: Confidence = "medium"
 
 
+class TokenUsage(BaseModel):
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    llm_calls: int = 0
+
+
 class ReviewReport(BaseModel):
     summary: str = Field(description="PR 整体在做什么、为什么、改在哪些层")
     highlights: list[str] = Field(default_factory=list, description="值得肯定的设计点")
@@ -39,3 +46,4 @@ class ReviewReport(BaseModel):
     suggestions: list[Suggestion] = Field(default_factory=list)
     model: str = ""
     elapsed_ms: int = 0
+    token_usage: TokenUsage = Field(default_factory=TokenUsage)

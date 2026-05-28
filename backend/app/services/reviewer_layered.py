@@ -29,9 +29,10 @@ from typing import Any
 from app.core.config import get_settings
 from app.services.github_client import GitHubClient
 from app.services.github_schema import PRBundle, PRFile
-from app.services.llm_client import LLMClient, extract_json
+from app.services.llm_client import LLMClient, TokenUsage, extract_json
 from app.services.pr_url import PRRef
 from app.services.review_schema import ReviewReport, RiskItem, Suggestion
+from app.services.review_schema import TokenUsage as ReportTokenUsage
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,7 @@ async def _triage(
     *,
     fast_model: str,
     fallback_model: str,
-) -> dict:
+) -> tuple[dict, TokenUsage]:
     resp = await llm.chat_json(
         models=[fast_model, fallback_model],
         system=TRIAGE_SYSTEM,
@@ -150,7 +151,7 @@ async def _triage(
         max_tokens=2048,
         temperature=0.2,
     )
-    return extract_json(resp.content)
+    return extract_json(resp.content), resp.usage
 
 
 async def _deep_review_one(
@@ -160,7 +161,7 @@ async def _deep_review_one(
     *,
     primary_model: str,
     fallback_model: str,
-) -> dict:
+) -> tuple[dict, TokenUsage]:
     resp = await llm.chat_json(
         models=[primary_model, fallback_model],
         system=DEEP_REVIEW_SYSTEM,
@@ -168,7 +169,7 @@ async def _deep_review_one(
         max_tokens=2048,
         temperature=0.2,
     )
-    return extract_json(resp.content)
+    return extract_json(resp.content), resp.usage
 
 
 _SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
@@ -193,9 +194,11 @@ async def review_pr_layered(
     client = llm or LLMClient()
 
     t0 = time.time()
+    total_usage = TokenUsage()
 
     # 第一层:粗筛
-    triage = await _triage(bundle, client, fast_model=fm, fallback_model=fb)
+    triage, triage_usage = await _triage(bundle, client, fast_model=fm, fallback_model=fb)
+    total_usage.add(triage_usage)
     summary = triage.get("summary", "")
     highlights = triage.get("highlights", []) or []
     file_attentions: dict[str, str] = {
@@ -215,7 +218,7 @@ async def review_pr_layered(
     # 第二层:并发深审
     sem = asyncio.Semaphore(deep_concurrency)
 
-    async def review_one(f: PRFile) -> dict:
+    async def review_one(f: PRFile) -> tuple[dict, TokenUsage]:
         async with sem:
             full_content: str | None = None
             if gh is not None:
@@ -231,14 +234,15 @@ async def review_pr_layered(
                 )
             except Exception as e:
                 logger.warning("deep review failed for %s: %s", f.filename, e)
-                return {"risks": [], "suggestions": []}
+                return ({"risks": [], "suggestions": []}, TokenUsage())
 
     deep_results = await asyncio.gather(*(review_one(f) for f in deep_files))
 
     # 第三层:聚合
     risks: list[RiskItem] = []
     suggestions: list[Suggestion] = []
-    for res in deep_results:
+    for res, usage in deep_results:
+        total_usage.add(usage)
         for r in res.get("risks", []) or []:
             try:
                 risks.append(RiskItem(**r))
@@ -259,6 +263,7 @@ async def review_pr_layered(
         suggestions=suggestions,
         model=pm,
         elapsed_ms=int((time.time() - t0) * 1000),
+        token_usage=ReportTokenUsage(**total_usage.__dict__),
     )
 
 
@@ -319,12 +324,14 @@ async def review_pr_layered_stream(
 
     # 第一层
     try:
-        triage = await _triage(bundle, client, fast_model=fm, fallback_model=fb)
+        triage, triage_usage = await _triage(bundle, client, fast_model=fm, fallback_model=fb)
     except Exception as e:
         logger.exception("triage failed")
         yield ReviewEvent("error", {"stage": "triage", "message": str(e)})
         return
 
+    total_usage = TokenUsage()
+    total_usage.add(triage_usage)
     summary = triage.get("summary", "")
     highlights = triage.get("highlights", []) or []
     file_attentions: dict[str, str] = {
@@ -345,11 +352,12 @@ async def review_pr_layered_stream(
                 for f in bundle.files
                 if file_attentions.get(f.filename, "normal") != "deep"
             ],
+            "token_usage": triage_usage.__dict__,
         },
     )
 
     # 第二层:并发深审,但用 queue 把完成顺序流出去
-    queue: asyncio.Queue[tuple[PRFile, dict | Exception]] = asyncio.Queue()
+    queue: asyncio.Queue[tuple[PRFile, dict | Exception, TokenUsage]] = asyncio.Queue()
     sem = asyncio.Semaphore(deep_concurrency)
 
     async def review_one(f: PRFile) -> None:
@@ -363,13 +371,13 @@ async def review_pr_layered_stream(
                 except Exception:
                     full_content = None
             try:
-                res = await _deep_review_one(
+                res, usage = await _deep_review_one(
                     f, full_content, client, primary_model=pm, fallback_model=fb
                 )
-                await queue.put((f, res))
+                await queue.put((f, res, usage))
             except Exception as e:
                 logger.warning("deep review failed for %s: %s", f.filename, e)
-                await queue.put((f, e))
+                await queue.put((f, e, TokenUsage()))
 
     tasks = [asyncio.create_task(review_one(f)) for f in deep_files]
     pending = len(tasks)
@@ -381,12 +389,19 @@ async def review_pr_layered_stream(
     all_risks: list[RiskItem] = []
     all_suggestions: list[Suggestion] = []
     while pending > 0:
-        f, payload = await queue.get()
+        f, payload, usage = await queue.get()
         pending -= 1
+        total_usage.add(usage)
         if isinstance(payload, Exception):
             yield ReviewEvent(
                 "file_done",
-                {"file": f.filename, "error": str(payload), "risks": [], "suggestions": []},
+                {
+                    "file": f.filename,
+                    "error": str(payload),
+                    "risks": [],
+                    "suggestions": [],
+                    "token_usage": usage.__dict__,
+                },
             )
             continue
 
@@ -411,6 +426,7 @@ async def review_pr_layered_stream(
                 "file": f.filename,
                 "risks": [r.model_dump() for r in file_risks],
                 "suggestions": [sg.model_dump() for sg in file_suggestions],
+                "token_usage": usage.__dict__,
             },
         )
 
@@ -425,5 +441,6 @@ async def review_pr_layered_stream(
         suggestions=all_suggestions,
         model=pm,
         elapsed_ms=int((time.time() - t0) * 1000),
+        token_usage=ReportTokenUsage(**total_usage.__dict__),
     )
     yield ReviewEvent("done", final.model_dump())
