@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 
 from openai import APIError, AsyncOpenAI
@@ -76,7 +77,10 @@ class LLMClient:
 
 
 def extract_json(text: str) -> dict:
-    """从 LLM 输出里抽取 JSON 对象,容忍 ```json 包裹与前后缀文本。"""
+    """从 LLM 输出里抽取 JSON 对象,容忍 ```json 包裹与前后缀文本。
+
+    解析失败时做一次容错重试:去掉控制字符、替换智能引号。仍失败才抛 LLMError。
+    """
     s = text.strip()
     if s.startswith("```"):
         # 去掉首行 ``` 或 ```json
@@ -91,4 +95,26 @@ def extract_json(text: str) -> dict:
     end = s.rfind("}")
     if start == -1 or end == -1 or end <= start:
         raise LLMError(f"模型输出无法解析为 JSON: {text[:200]}")
-    return json.loads(s[start : end + 1])
+    candidate = s[start : end + 1]
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError as first_err:
+        # 容错:去掉控制字符 + 智能引号 → ASCII 引号
+        cleaned = _clean_json_like(candidate)
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as second_err:
+            raise LLMError(
+                f"模型输出 JSON 解析失败(已尝试容错): {second_err}; 首次错误: {first_err}; "
+                f"原文片段: {candidate[:200]}"
+            ) from second_err
+
+
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+_SMART_QUOTES = str.maketrans({"“": '"', "”": '"', "‘": "'", "’": "'"})
+
+
+def _clean_json_like(s: str) -> str:
+    """LLM 输出常见的两类问题:控制字符 + 智能引号。"""
+    s = _CONTROL_CHARS_RE.sub("", s)
+    return s.translate(_SMART_QUOTES)
