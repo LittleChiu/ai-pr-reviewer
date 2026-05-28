@@ -10,6 +10,11 @@
 
 第三层 — 聚合:
   纯代码合并:汇总各文件的 risks/suggestions,按严重程度排序
+
+提供两个版本:
+- review_pr_layered: 一次性返回 ReviewReport(同步等所有结果)
+- review_pr_layered_stream: AsyncGenerator,每完成一阶段产出一个 ReviewEvent,
+  让前端 SSE 流式渲染(先看到 summary,再看到每个文件的 risks 陆续到达)
 """
 
 from __future__ import annotations
@@ -17,6 +22,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from typing import Any
 
 from app.core.config import get_settings
 from app.services.github_client import GitHubClient
@@ -252,3 +260,170 @@ async def review_pr_layered(
         model=pm,
         elapsed_ms=int((time.time() - t0) * 1000),
     )
+
+
+# ---------------------------------------------------------------------------
+# 流式版本:每完成一阶段产出一个事件
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ReviewEvent:
+    """SSE 事件的结构化表示。
+
+    type 含义:
+    - "started": 评审开始,带 PR 元信息
+    - "triage": 粗筛完成,带 summary / highlights / 待深审文件列表
+    - "file_started": 某文件开始深审
+    - "file_done": 某文件深审完成,带这个文件的 risks/suggestions
+    - "done": 全部完成,带最终聚合的 ReviewReport
+    - "error": 流程中出错
+    """
+
+    type: str
+    data: dict[str, Any]
+
+
+async def review_pr_layered_stream(
+    bundle: PRBundle,
+    *,
+    ref: PRRef,
+    llm: LLMClient | None = None,
+    gh: GitHubClient | None = None,
+    primary_model: str | None = None,
+    fast_model: str | None = None,
+    deep_concurrency: int = 3,
+    max_deep_files: int = 8,
+) -> AsyncIterator[ReviewEvent]:
+    """流式三层评审。逐阶段产出事件,适合 SSE。"""
+    s = get_settings()
+    pm = primary_model or s.primary_model
+    fm = fast_model or s.fast_model
+    fb = s.fallback_model
+    client = llm or LLMClient()
+
+    t0 = time.time()
+    md = bundle.metadata
+
+    yield ReviewEvent(
+        "started",
+        {
+            "pr": f"{md.owner}/{md.repo}#{md.number}",
+            "title": md.title,
+            "files": md.changed_files,
+            "additions": md.additions,
+            "deletions": md.deletions,
+            "model": pm,
+        },
+    )
+
+    # 第一层
+    try:
+        triage = await _triage(bundle, client, fast_model=fm, fallback_model=fb)
+    except Exception as e:
+        logger.exception("triage failed")
+        yield ReviewEvent("error", {"stage": "triage", "message": str(e)})
+        return
+
+    summary = triage.get("summary", "")
+    highlights = triage.get("highlights", []) or []
+    file_attentions: dict[str, str] = {
+        item.get("filename", ""): item.get("attention", "normal")
+        for item in (triage.get("files") or [])
+    }
+    deep_files = [f for f in bundle.files if file_attentions.get(f.filename, "normal") == "deep"]
+    deep_files = sorted(deep_files, key=lambda f: -f.changes)[:max_deep_files]
+
+    yield ReviewEvent(
+        "triage",
+        {
+            "summary": summary,
+            "highlights": highlights,
+            "deep_files": [f.filename for f in deep_files],
+            "skipped": [
+                f.filename
+                for f in bundle.files
+                if file_attentions.get(f.filename, "normal") != "deep"
+            ],
+        },
+    )
+
+    # 第二层:并发深审,但用 queue 把完成顺序流出去
+    queue: asyncio.Queue[tuple[PRFile, dict | Exception]] = asyncio.Queue()
+    sem = asyncio.Semaphore(deep_concurrency)
+
+    async def review_one(f: PRFile) -> None:
+        async with sem:
+            full_content: str | None = None
+            if gh is not None:
+                try:
+                    full_content = await gh.fetch_file_at_ref(
+                        ref, f.filename, bundle.metadata.head_sha
+                    )
+                except Exception:
+                    full_content = None
+            try:
+                res = await _deep_review_one(
+                    f, full_content, client, primary_model=pm, fallback_model=fb
+                )
+                await queue.put((f, res))
+            except Exception as e:
+                logger.warning("deep review failed for %s: %s", f.filename, e)
+                await queue.put((f, e))
+
+    tasks = [asyncio.create_task(review_one(f)) for f in deep_files]
+    pending = len(tasks)
+
+    # 通知前端哪些文件即将开始评审
+    for f in deep_files:
+        yield ReviewEvent("file_started", {"file": f.filename, "changes": f.changes})
+
+    all_risks: list[RiskItem] = []
+    all_suggestions: list[Suggestion] = []
+    while pending > 0:
+        f, payload = await queue.get()
+        pending -= 1
+        if isinstance(payload, Exception):
+            yield ReviewEvent(
+                "file_done",
+                {"file": f.filename, "error": str(payload), "risks": [], "suggestions": []},
+            )
+            continue
+
+        file_risks: list[RiskItem] = []
+        for r in payload.get("risks", []) or []:
+            try:
+                file_risks.append(RiskItem(**r))
+            except Exception as e:
+                logger.warning("skip malformed risk: %s", e)
+        file_suggestions: list[Suggestion] = []
+        for sg in payload.get("suggestions", []) or []:
+            try:
+                file_suggestions.append(Suggestion(**sg))
+            except Exception as e:
+                logger.warning("skip malformed suggestion: %s", e)
+
+        all_risks.extend(file_risks)
+        all_suggestions.extend(file_suggestions)
+        yield ReviewEvent(
+            "file_done",
+            {
+                "file": f.filename,
+                "risks": [r.model_dump() for r in file_risks],
+                "suggestions": [sg.model_dump() for sg in file_suggestions],
+            },
+        )
+
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+    all_risks.sort(key=lambda x: (_SEVERITY_RANK.get(x.severity, 99), x.file))
+
+    final = ReviewReport(
+        summary=summary,
+        highlights=highlights,
+        risks=all_risks,
+        suggestions=all_suggestions,
+        model=pm,
+        elapsed_ms=int((time.time() - t0) * 1000),
+    )
+    yield ReviewEvent("done", final.model_dump())

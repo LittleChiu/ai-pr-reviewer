@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { Confidence, ReviewReport, Severity } from "@/lib/types";
-import { ApiCallError, reviewPR } from "@/lib/api";
+import type { Confidence, ReviewReport, RiskItem, Severity, Suggestion } from "@/lib/types";
+import { ApiCallError, reviewPRStream, type StreamEvent } from "@/lib/api";
 import { HealthBadge } from "@/components/HealthBadge";
 
 const SEVERITY_STYLES: Record<Severity, string> = {
@@ -18,10 +18,40 @@ const CONFIDENCE_STYLES: Record<Confidence, string> = {
   low: "text-zinc-400 dark:text-zinc-500",
 };
 
+type FileStatus = "pending" | "running" | "done" | "error";
+
+interface FileProgress {
+  file: string;
+  status: FileStatus;
+  risks: RiskItem[];
+  suggestions: Suggestion[];
+  error?: string;
+}
+
+interface StreamState {
+  startedAt: number | null;
+  prInfo: { pr: string; title: string; model: string } | null;
+  summary: string;
+  highlights: string[];
+  files: Map<string, FileProgress>;
+  finalReport: ReviewReport | null;
+  errorMsg: string | null;
+}
+
+const initState: StreamState = {
+  startedAt: null,
+  prInfo: null,
+  summary: "",
+  highlights: [],
+  files: new Map(),
+  finalReport: null,
+  errorMsg: null,
+};
+
 export default function Home() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  const [report, setReport] = useState<ReviewReport | null>(null);
+  const [state, setState] = useState<StreamState>(initState);
   const [error, setError] = useState<string | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -29,16 +59,15 @@ export default function Home() {
     if (!url.trim() || loading) return;
     setLoading(true);
     setError(null);
-    setReport(null);
+    setState({ ...initState, startedAt: Date.now(), files: new Map() });
+
     try {
-      const r = await reviewPR(url.trim());
-      setReport(r);
+      await reviewPRStream(url.trim(), (ev: StreamEvent) => {
+        setState((s) => applyEvent(s, ev));
+      });
     } catch (err) {
-      if (err instanceof ApiCallError) {
-        setError(err.detail);
-      } else {
-        setError(err instanceof Error ? err.message : "未知错误");
-      }
+      if (err instanceof ApiCallError) setError(err.detail);
+      else setError(err instanceof Error ? err.message : "未知错误");
     } finally {
       setLoading(false);
     }
@@ -58,7 +87,7 @@ export default function Home() {
             <HealthBadge />
           </div>
           <p className="text-zinc-600 dark:text-zinc-400 text-sm">
-            粘贴 GitHub PR 链接,几秒钟拿到一份带置信度的智能评审报告。
+            粘贴 GitHub PR 链接,基于三层 prompt 流式返回带置信度的智能评审报告。
           </p>
         </header>
 
@@ -89,37 +118,103 @@ export default function Home() {
           </div>
         )}
 
-        {loading && (
-          <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
-            <div className="h-4 w-4 rounded-full border-2 border-zinc-300 border-t-transparent animate-spin" />
-            正在拉取 PR 数据并调用 LLM,首轮通常需要 20-60 秒...
-          </div>
-        )}
+        {!loading && !state.startedAt && !error && <EmptyState />}
 
-        {report && <ReportView report={report} />}
-
-        {!loading && !report && !error && <EmptyState />}
+        {state.startedAt && <StreamView state={state} loading={loading} />}
       </div>
     </div>
   );
 }
 
-function ReportView({ report }: { report: ReviewReport }) {
+function applyEvent(s: StreamState, ev: StreamEvent): StreamState {
+  switch (ev.type) {
+    case "started":
+      return {
+        ...s,
+        prInfo: { pr: ev.data.pr, title: ev.data.title, model: ev.data.model },
+      };
+    case "triage": {
+      const files = new Map(s.files);
+      for (const f of ev.data.deep_files) {
+        files.set(f, { file: f, status: "pending", risks: [], suggestions: [] });
+      }
+      return {
+        ...s,
+        summary: ev.data.summary,
+        highlights: ev.data.highlights,
+        files,
+      };
+    }
+    case "file_started": {
+      const files = new Map(s.files);
+      const cur = files.get(ev.data.file) ?? {
+        file: ev.data.file,
+        status: "pending" as FileStatus,
+        risks: [],
+        suggestions: [],
+      };
+      files.set(ev.data.file, { ...cur, status: "running" });
+      return { ...s, files };
+    }
+    case "file_done": {
+      const files = new Map(s.files);
+      const cur = files.get(ev.data.file) ?? {
+        file: ev.data.file,
+        status: "done" as FileStatus,
+        risks: [],
+        suggestions: [],
+      };
+      files.set(ev.data.file, {
+        ...cur,
+        status: ev.data.error ? "error" : "done",
+        risks: ev.data.risks,
+        suggestions: ev.data.suggestions,
+        error: ev.data.error,
+      });
+      return { ...s, files };
+    }
+    case "done":
+      return { ...s, finalReport: ev.data };
+    case "error":
+      return { ...s, errorMsg: ev.data.message };
+    default:
+      return s;
+  }
+}
+
+function StreamView({ state, loading }: { state: StreamState; loading: boolean }) {
+  const filesArr = Array.from(state.files.values());
+  const allRisks = filesArr.flatMap((f) => f.risks);
+  const allSuggestions = filesArr.flatMap((f) => f.suggestions);
+  const totalCount = filesArr.length;
+  const doneCount = filesArr.filter((f) => f.status === "done" || f.status === "error").length;
+
   return (
     <div className="space-y-8">
-      <Section title="📋 PR 总览">
-        <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
-          {report.summary}
-        </p>
-        <div className="mt-3 text-xs text-zinc-400 dark:text-zinc-500">
-          模型: <code>{report.model}</code> · 耗时 {report.elapsed_ms} ms
+      {state.prInfo && (
+        <div className="text-xs text-zinc-500 dark:text-zinc-400 flex flex-wrap gap-3 items-center">
+          <code className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900">
+            {state.prInfo.pr}
+          </code>
+          <span>·</span>
+          <span>{state.prInfo.title}</span>
+          <span>·</span>
+          <code>{state.prInfo.model}</code>
         </div>
-      </Section>
+      )}
 
-      {report.highlights.length > 0 && (
+      {state.summary && (
+        <Section title="📋 PR 总览">
+          <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+            {state.summary}
+          </p>
+        </Section>
+      )}
+
+      {state.highlights.length > 0 && (
         <Section title="✨ 亮点">
           <ul className="space-y-2 text-sm">
-            {report.highlights.map((h, i) => (
+            {state.highlights.map((h, i) => (
               <li key={i} className="flex gap-2 text-zinc-700 dark:text-zinc-300">
                 <span className="text-emerald-500">▸</span>
                 <span>{h}</span>
@@ -129,95 +224,137 @@ function ReportView({ report }: { report: ReviewReport }) {
         </Section>
       )}
 
-      {report.risks.length > 0 && (
-        <Section title={`⚠️  风险 (${report.risks.length})`}>
-          <div className="space-y-3">
-            {report.risks.map((r, i) => (
-              <div
-                key={i}
-                className={`rounded-lg border p-4 ${SEVERITY_STYLES[r.severity]}`}
-              >
-                <div className="flex items-start justify-between gap-3 mb-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-mono uppercase">
-                      {r.severity}
-                    </span>
-                    <span className="text-xs opacity-60">·</span>
-                    <span className="text-xs opacity-60">{r.category}</span>
-                    <span className="text-xs opacity-60">·</span>
-                    <code className="text-xs">{r.file}</code>
-                    {r.line_hint && (
-                      <>
-                        <span className="text-xs opacity-60">·</span>
-                        <code className="text-xs">L{r.line_hint}</code>
-                      </>
-                    )}
-                  </div>
-                  <span
-                    className={`text-xs ${CONFIDENCE_STYLES[r.confidence]}`}
-                  >
-                    {r.confidence} confidence
-                  </span>
-                </div>
-                <h3 className="font-medium text-sm mb-1">{r.title}</h3>
-                <p className="text-sm opacity-80 whitespace-pre-wrap">
-                  {r.detail}
-                </p>
-              </div>
+      {totalCount > 0 && (
+        <Section
+          title={`🔍 文件深审 (${doneCount}/${totalCount})`}
+        >
+          <div className="space-y-2">
+            {filesArr.map((f) => (
+              <FileProgressItem key={f.file} f={f} />
             ))}
           </div>
         </Section>
       )}
 
-      {report.suggestions.length > 0 && (
-        <Section title={`💡 建议 (${report.suggestions.length})`}>
+      {allRisks.length > 0 && (
+        <Section title={`⚠️  风险 (${allRisks.length})`}>
           <div className="space-y-3">
-            {report.suggestions.map((s, i) => (
-              <div
-                key={i}
-                className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 bg-white dark:bg-zinc-900"
-              >
-                <div className="flex items-start justify-between gap-3 mb-2">
-                  <div className="flex items-center gap-2 flex-wrap text-xs text-zinc-500 dark:text-zinc-400">
-                    <code>{s.file}</code>
-                    {s.line_hint && (
-                      <>
-                        <span>·</span>
-                        <code>L{s.line_hint}</code>
-                      </>
-                    )}
-                  </div>
-                  <span
-                    className={`text-xs ${CONFIDENCE_STYLES[s.confidence]}`}
-                  >
-                    {s.confidence}
-                  </span>
-                </div>
-                <h3 className="font-medium text-sm mb-1">{s.title}</h3>
-                <p className="text-sm text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap">
-                  {s.detail}
-                </p>
-                {s.code_hint && (
-                  <pre className="mt-2 p-3 rounded bg-zinc-50 dark:bg-zinc-950 text-xs overflow-x-auto">
-                    <code>{s.code_hint}</code>
-                  </pre>
-                )}
-              </div>
+            {allRisks.map((r, i) => (
+              <RiskCard key={i} r={r} />
             ))}
           </div>
         </Section>
+      )}
+
+      {allSuggestions.length > 0 && (
+        <Section title={`💡 建议 (${allSuggestions.length})`}>
+          <div className="space-y-3">
+            {allSuggestions.map((s, i) => (
+              <SuggestionCard key={i} s={s} />
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {state.finalReport && (
+        <div className="text-xs text-zinc-400 dark:text-zinc-500 text-center pt-4">
+          ✓ 完成 · 总计耗时 {state.finalReport.elapsed_ms} ms
+        </div>
+      )}
+
+      {loading && !state.finalReport && (
+        <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
+          <div className="h-4 w-4 rounded-full border-2 border-zinc-300 border-t-transparent animate-spin" />
+          流式处理中...
+        </div>
       )}
     </div>
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function FileProgressItem({ f }: { f: FileProgress }) {
+  const dot =
+    f.status === "running"
+      ? "bg-blue-500 animate-pulse"
+      : f.status === "done"
+        ? "bg-emerald-500"
+        : f.status === "error"
+          ? "bg-red-500"
+          : "bg-zinc-300 dark:bg-zinc-700";
+  return (
+    <div className="flex items-center gap-3 text-xs">
+      <span className={`h-2 w-2 rounded-full ${dot}`} />
+      <code className="text-zinc-600 dark:text-zinc-400">{f.file}</code>
+      {f.status === "done" && (f.risks.length > 0 || f.suggestions.length > 0) && (
+        <span className="text-zinc-400">
+          · {f.risks.length} risks · {f.suggestions.length} suggestions
+        </span>
+      )}
+      {f.status === "error" && (
+        <span className="text-red-400">· {f.error ?? "失败"}</span>
+      )}
+    </div>
+  );
+}
+
+function RiskCard({ r }: { r: RiskItem }) {
+  return (
+    <div className={`rounded-lg border p-4 ${SEVERITY_STYLES[r.severity]}`}>
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-mono uppercase">{r.severity}</span>
+          <span className="text-xs opacity-60">·</span>
+          <span className="text-xs opacity-60">{r.category}</span>
+          <span className="text-xs opacity-60">·</span>
+          <code className="text-xs">{r.file}</code>
+          {r.line_hint && (
+            <>
+              <span className="text-xs opacity-60">·</span>
+              <code className="text-xs">L{r.line_hint}</code>
+            </>
+          )}
+        </div>
+        <span className={`text-xs ${CONFIDENCE_STYLES[r.confidence]}`}>
+          {r.confidence} confidence
+        </span>
+      </div>
+      <h3 className="font-medium text-sm mb-1">{r.title}</h3>
+      <p className="text-sm opacity-80 whitespace-pre-wrap">{r.detail}</p>
+    </div>
+  );
+}
+
+function SuggestionCard({ s }: { s: Suggestion }) {
+  return (
+    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 bg-white dark:bg-zinc-900">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex items-center gap-2 flex-wrap text-xs text-zinc-500 dark:text-zinc-400">
+          <code>{s.file}</code>
+          {s.line_hint && (
+            <>
+              <span>·</span>
+              <code>L{s.line_hint}</code>
+            </>
+          )}
+        </div>
+        <span className={`text-xs ${CONFIDENCE_STYLES[s.confidence]}`}>
+          {s.confidence}
+        </span>
+      </div>
+      <h3 className="font-medium text-sm mb-1">{s.title}</h3>
+      <p className="text-sm text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap">
+        {s.detail}
+      </p>
+      {s.code_hint && (
+        <pre className="mt-2 p-3 rounded bg-zinc-50 dark:bg-zinc-950 text-xs overflow-x-auto">
+          <code>{s.code_hint}</code>
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
       <h2 className="text-sm font-semibold mb-3 text-zinc-900 dark:text-zinc-100">
