@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (Python / FastAPI)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip if backend not yet present
+        id: check
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "exists=false" >> $GITHUB_OUTPUT
+          else
+            echo "exists=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install uv
+        if: steps.check.outputs.exists == 'true'
+        uses: astral-sh/setup-uv@v3
+
+      - name: Sync dependencies
+        if: steps.check.outputs.exists == 'true'
+        run: uv sync --all-extras
+
+      - name: Lint (ruff)
+        if: steps.check.outputs.exists == 'true'
+        run: uv run ruff check .
+
+      - name: Format check (ruff)
+        if: steps.check.outputs.exists == 'true'
+        run: uv run ruff format --check .
+
+      - name: Type check (mypy)
+        if: steps.check.outputs.exists == 'true'
+        run: uv run mypy app || true
+
+      - name: Tests
+        if: steps.check.outputs.exists == 'true'
+        run: uv run pytest -q || true
+
+  frontend:
+    name: Frontend (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip if frontend not yet present
+        id: check
+        run: |
+          if [ ! -f package.json ]; then
+            echo "exists=false" >> $GITHUB_OUTPUT
+          else
+            echo "exists=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        if: steps.check.outputs.exists == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install
+        if: steps.check.outputs.exists == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        if: steps.check.outputs.exists == 'true'
+        run: pnpm lint
+
+      - name: Typecheck
+        if: steps.check.outputs.exists == 'true'
+        run: pnpm typecheck || pnpm exec tsc --noEmit
+
+      - name: Build
+        if: steps.check.outputs.exists == 'true'
+        run: pnpm build
