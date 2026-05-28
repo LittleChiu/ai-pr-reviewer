@@ -70,7 +70,7 @@ jobs:
         if: steps.check.outputs.exists == 'true'
         uses: pnpm/action-setup@v4
         with:
-          run_install: false
+          version: 10
 
       - name: Setup Node
         if: steps.check.outputs.exists == 'true'
