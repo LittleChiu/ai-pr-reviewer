@@ -87,7 +87,7 @@ export default function Home() {
       if (ctrl.signal.aborted) {
         setError("已取消");
       } else if (err instanceof ApiCallError) {
-        setError(err.detail);
+        setError(err.userMessage);
       } else {
         setError(err instanceof Error ? err.message : "未知错误");
       }

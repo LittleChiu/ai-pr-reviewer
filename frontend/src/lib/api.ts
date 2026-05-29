@@ -3,14 +3,64 @@ import type { ReviewReport, RiskItem, Suggestion } from "./types";
 const DEFAULT_API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
+const ERROR_FRIENDLY: Record<string, string> = {
+  PR_NOT_FOUND: "PR 不存在或仓库不公开。请检查链接。",
+  RATE_LIMITED: "GitHub API 触发限流,稍后再试,或在后端配置 GITHUB_TOKEN。",
+  GITHUB_ERROR: "访问 GitHub 失败,可能是网络问题,请稍后再试。",
+  LLM_UNAVAILABLE: "LLM 网关暂时不可用,请稍后重试。",
+  VALIDATION_ERROR: "请求参数有误,请检查输入。",
+  BAD_REQUEST: "请求格式不正确。",
+  INTERNAL_ERROR: "服务器内部错误,请联系管理员。",
+};
+
 export class ApiCallError extends Error {
   constructor(
     public status: number,
     public detail: string,
+    public code: string | null = null,
+    public hint: string | null = null,
   ) {
     super(`[${status}] ${detail}`);
     this.name = "ApiCallError";
   }
+
+  /** 给用户看的中文文案。优先用 hint,其次用 code 映射,最后兜底 detail。 */
+  get userMessage(): string {
+    if (this.hint) return this.hint;
+    if (this.code && ERROR_FRIENDLY[this.code]) return ERROR_FRIENDLY[this.code];
+    return this.detail;
+  }
+}
+
+async function parseError(res: Response): Promise<ApiCallError> {
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    return new ApiCallError(res.status, res.statusText);
+  }
+  // 统一格式: { error: { code, message, hint? } }
+  if (
+    body &&
+    typeof body === "object" &&
+    "error" in body &&
+    body.error &&
+    typeof body.error === "object"
+  ) {
+    const e = body.error as { code?: string; message?: string; hint?: string };
+    return new ApiCallError(
+      res.status,
+      e.message ?? res.statusText,
+      e.code ?? null,
+      e.hint ?? null,
+    );
+  }
+  // 旧格式 { detail: string } 兜底
+  if (body && typeof body === "object" && "detail" in body) {
+    const detail = (body as { detail: unknown }).detail;
+    return new ApiCallError(res.status, String(detail));
+  }
+  return new ApiCallError(res.status, res.statusText);
 }
 
 export async function reviewPR(
@@ -28,14 +78,7 @@ export async function reviewPR(
     signal: opts?.signal,
   });
   if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? detail;
-    } catch {
-      // not json, keep statusText
-    }
-    throw new ApiCallError(res.status, detail);
+    throw await parseError(res);
   }
   return (await res.json()) as ReviewReport;
 }
@@ -100,14 +143,7 @@ export async function reviewPRStream(
     signal: opts?.signal,
   });
   if (!res.ok || !res.body) {
-    let detail = res.statusText;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? detail;
-    } catch {
-      // not json
-    }
-    throw new ApiCallError(res.status, detail);
+    throw await parseError(res);
   }
 
   const reader = res.body.getReader();
