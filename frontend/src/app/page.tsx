@@ -107,7 +107,7 @@ export default function Home() {
         <header className="mb-10">
           <div className="flex items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 flex items-center justify-center text-white text-lg shadow-md">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-400 via-orange-500 to-pink-500 flex items-center justify-center text-white text-lg shadow-md">
                 🤖
               </div>
               <div>
