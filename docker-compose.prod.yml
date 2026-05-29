@@ -50,7 +50,7 @@ services:
     image: ghcr.io/littlechiu/ai-pr-reviewer/frontend:${IMAGE_TAG:-latest}
     container_name: ai-pr-reviewer-frontend
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+      BACKEND_URL: http://backend:8000
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
