@@ -33,6 +33,7 @@ class Settings(BaseSettings):
 
     cache_enabled: bool = True
     cache_db_path: str = "./data/cache.db"
+    vision_enabled: bool = True
 
 
 @lru_cache
