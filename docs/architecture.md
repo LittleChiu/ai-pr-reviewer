@@ -20,7 +20,7 @@
                                  │ HTTPS(Cloudflare Tunnel)
                                  ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│           FastAPI · 自建 GPU 服务器                               │
+│           FastAPI · 自建服务器                                     │
 │                                                                  │
 │  api/review.py                                                   │
 │   ├─ POST /api/review        非流式(layered 或 single)           │
@@ -92,7 +92,7 @@
 
 ### 决策 3:为什么后端不放 Vercel?
 
-Vercel Functions 60s 超时,layered 评审一轮 30-90s,巨型 PR 更长。我们用自建服务器 + Cloudflare Tunnel 暴露公网。GPU 资源还能为未来本地推理预留可能性。
+Vercel Functions 60s 超时,layered 评审一轮 30-90s,巨型 PR 更长。我们用自建服务器 + Cloudflare Tunnel 暴露公网,不受云厂商运行时限制。
 
 ### 决策 4:为什么 GitHub 数据走两套接口?
 
