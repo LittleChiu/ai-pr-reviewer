@@ -1,0 +1,14 @@
+{
+  "summary": "此 PR 旨在修复 CI 因 starlette 引入的弃用警告而失败的问题。通过将测试依赖 `httpx` 替换为 `httpx2`，并更新相关测试文件中的导入和使用方式，确保测试在新依赖下正常运行。改动涉及 CI 工作流配置文件、项目依赖定义、两个测试文件以及自动生成的锁文件，整体属于一次小范围的依赖与测试兼容性更新。",
+  "highlights": [],
+  "risks": [],
+  "suggestions": [],
+  "model": "deepseek-v4-pro-max",
+  "elapsed_ms": 10990,
+  "token_usage": {
+    "prompt_tokens": 573,
+    "completion_tokens": 896,
+    "total_tokens": 1469,
+    "llm_calls": 1
+  }
+}
