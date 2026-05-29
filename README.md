@@ -95,16 +95,14 @@ pnpm dev
 
 ## 🧠 模型选择思路
 
-四档分工，OpenAI 兼容协议下任意切换（详见 [docs/model-strategy.md](./docs/model-strategy.md)）：
+双模型策略，OpenAI 兼容协议下任意切换（详见 [docs/model-strategy.md](./docs/model-strategy.md)）：
 
 | 档位 | 默认模型 | 用途 |
 |---|---|---|
-| **PRIMARY** | `deepseek-v4-pro-max` | 文件级深度评审 |
-| **FAST** | `deepseek-v4-flash` | 整体粗筛、attention 分类 |
-| **VISION** | `gemini-3.1-flash-lite` | PR 描述含截图时(预留) |
-| **FALLBACK** | `claude-sonnet-4-6` | 主路失败时兜底 |
+| **PRIMARY** | `deepseek-v4-pro-max` | 文本评审(粗筛 + 深审都用它) |
+| **VISION** | `gemini-3.1-flash-lite` | PR 描述含截图时使用(预留) |
 
-模型 fallback 链由调用方传入：粗筛走 `fast → fallback`，深审走 `primary → fallback`。任意主路抖动都不会中断评审。
+每个模型内部支持同模型重试(默认 3 次)，应对网关瞬时抖动。
 
 ## 📡 上下文获取方式
 
