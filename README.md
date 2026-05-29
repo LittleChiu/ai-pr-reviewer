@@ -117,18 +117,26 @@ ai-pr-reviewer/
 │   ├── app/
 │   │   ├── api/            # /api/health, /api/pr/*, /api/review*
 │   │   ├── services/       # github_client, llm_client, reviewer*
-│   │   └── core/config.py  # pydantic-settings
-│   └── tests/              # 27 个用例,含 respx mock 与流式编排
+│   │   └── core/           # config.py, errors.py(统一错误处理)
+│   ├── tests/              # 38 个用例,含 respx mock 与流式编排
+│   └── Dockerfile          # python:3.11-slim + uv
 ├── frontend/               # Next.js 16 前端
 │   └── src/
 │       ├── app/page.tsx    # 主页:状态机 + SSE 渲染
 │       ├── components/     # HealthBadge 等
-│       └── lib/            # api.ts(含 SSE 解析) / types.ts
+│       └── lib/            # api.ts / types.ts / markdown.ts / useRecentUrls.ts
 ├── docs/
 │   ├── architecture.md     # 系统架构与决策
 │   ├── model-strategy.md   # 模型选择 / 上下文 / 扩展方向
-│   └── deploy.md           # 本地与生产部署
-├── scripts/dev.sh          # 一键启动
+│   ├── prompt-engineering.md # Prompt 设计原则与踩坑记录
+│   ├── product-research.md # 产品需求调研与同类对比
+│   ├── extending.md        # 6 个扩展点的落地步骤
+│   ├── deploy.md           # 本地与生产部署(含 Docker)
+│   ├── demo-script.md      # Demo 视频脚本(4-5 分钟)
+│   └── showcases/          # 3 个真实 PR 评审样例(md + json)
+├── docker-compose.yml      # 一行命令起前后端
+├── Makefile                # make help / make ci / make dev ...
+├── scripts/dev.sh          # 一键启动(非 Docker)
 └── PLAN.md                 # 方案文档(开发前提交,72h 全程参照)
 ```
 
