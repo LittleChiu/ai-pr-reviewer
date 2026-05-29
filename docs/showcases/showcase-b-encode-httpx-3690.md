@@ -1,0 +1,114 @@
+# Showcase B: encode/httpx#3690
+
+**PR**: [https://github.com/encode/httpx/pull/3690](https://github.com/encode/httpx/pull/3690)
+**主题**: 新增 .wait_ready() API
+**为什么选**: 演示对中等规模功能新增的多文件深审
+
+## 评审输出
+
+- **模型**: `deepseek-v4-pro-max`
+- **用时**: 244.5 s
+- **LLM 调用次数**: 3
+- **Token 消耗**: 4,679 prompt + 3,160 completion = **7,839** total
+
+### 📋 总结
+
+该 PR 在 HTTP 解析器中新增 `.wait_ready()` 方法，用于区分新请求/响应循环开始时的正常断开与协议错误。改动涉及 `ahttpx` 和 `httpx` 两个包的解析器和服务器模块，共 4 个文件。通过添加一个显式的就绪等待点，避免在 `recv_method_line()` 中误抛 `ProtocolError`，从而提升服务器处理客户端干净断开连接的正确性。
+
+### ✨ 亮点
+
+- 引入等待就绪状态机制，使解析器能够区分正常断开和协议异常，提升错误处理的准确性。
+- 改动简洁，仅围绕一个核心方法扩展，保持了模块接口的清晰性。
+
+### ⚠️ 风险 (6)
+
+#### [HIGH/bug] `src/ahttpx/_server.py` L148  — *high confidence*
+
+**`run()` 中 `server.wait()` 缺少 `await`，协程永远不会执行**
+
+`HTTPServer.wait()` 是一个 `async def` 方法，但在 `run()` 中调用时写的是 `server.wait()` 而非 `await server.wait()`。这意味着协程对象被创建后立即丢弃，`run()` 函数会在 `serve_http` 上下文管理器退出后立即返回，服务器不会持续运行。应改为 `await server.wait()`。
+
+#### [HIGH/bug] `src/httpx/_server.py` L113-115  — *medium confidence*
+
+**wait() 中移除 KeyboardInterrupt 处理导致无法优雅退出**
+
+原代码在 sleep(1) 外包裹了 try/except KeyboardInterrupt: break，使得用户按 CTRL+C 时能够跳出循环并正常退出。修改后直接调用 sleep(1) 且没有任何中断处理，KeyboardInterrupt 将向上传播到 run() 的 with serve_http(app) 上下文管理器，触发 __exit__，这在 Python 中实际上也能工作（上下文管理器会被正确清理），但行为依赖于 sleep() 的实现是否会重新抛出 KeyboardInterrupt。若 sleep() 来自自定义 NetworkBackend 且吞掉了 KeyboardInterrupt（例如内部捕获所有异常），则服务器将永远无法通过 CTRL+C 停止。此外，日志中提示 'Press CTRL+C to quit'，但实际退出机制已改变，存在文档与行为不一致的风险。建议至少在 wait() 中保留 KeyboardInterrupt 的捕获，或在 run() 层面明确处理。
+
+#### [MEDIUM/bug] `src/ahttpx/_server.py` L57-58  — *medium confidence*
+
+**keep-alive 判断后才 drain body，但非 keep-alive 时 body 未被消费**
+
+当 `self._parser.is_keepalive()` 为 False 时，`await stream.read()` 不会被调用，请求体可能未被完整消费。虽然此时连接会被关闭，但如果底层 `_reset()` 依赖解析器状态（例如需要读完当前请求才能正确关闭），可能导致解析器状态异常或资源泄漏。建议将 drain 逻辑移到 keep-alive 判断之外，或在 `_reset()` 内部保证无论如何都能安全关闭。
+
+#### [MEDIUM/bug] `src/ahttpx/_server.py` L44-55  — *medium confidence*
+
+**endpoint 抛出异常后仍继续循环，可能在解析器状态不一致时处理下一个请求**
+
+当 `self._endpoint(request)` 抛出异常时，代码发送 500 响应，但此时请求体（`stream`）可能尚未被消费。随后在 `is_keepalive()` 分支中调用 `await stream.read()` 可以缓解，但如果解析器在未完整读取请求体的情况下进入 `_reset()`，可能导致下一个请求解析错误。建议在异常处理路径中也确保请求体被完整消费后再 reset。
+
+#### [MEDIUM/bug] `src/httpx/_server.py` L57-58  — *medium confidence*
+
+**endpoint 抛出异常后仍调用 stream.read() 可能引发二次异常**
+
+当 self._endpoint(request) 抛出异常时，代码进入 except 分支发送 500 响应，但随后无论如何都会执行 if self._parser.is_keepalive(): stream.read()。此时请求体可能处于未知状态（endpoint 可能已部分读取或未读取），stream.read() 可能抛出异常，导致外层 except Exception 再次捕获并记录一条误导性的 'Internal Server Error' 日志，同时连接状态可能不一致。建议在 endpoint 异常路径中也确保 stream 被正确消费或连接被关闭，而不是依赖后续的通用逻辑。
+
+#### [MEDIUM/bug] `src/httpx/_server.py` L55-58  — *low confidence*
+
+**非 keepalive 连接下 stream.read() 被跳过但 _reset() 仍被调用**
+
+当连接不是 keepalive 时，stream.read() 被跳过（请求体可能未读完），然后直接调用 self._reset()。如果 _reset() 内部的 parser.reset() 假设请求体已被完全消费，则可能导致状态机错误或下一次循环读取到残留数据。虽然非 keepalive 连接在 _reset() 后通常会关闭，但 while not self._parser.is_closed() 的循环条件意味着如果 parser 没有在 reset 时标记为 closed，仍可能继续循环。建议明确非 keepalive 时的处理逻辑（如 break 或确保 parser 标记关闭）。
+
+### 💡 建议 (4)
+
+#### `src/httpx/_server.py` L113-115  — *high confidence*
+
+**在 wait() 中显式处理 KeyboardInterrupt 以保证可预期的退出行为**
+
+即使上下文管理器能捕获异常，显式处理 KeyboardInterrupt 使代码意图更清晰，也避免依赖 sleep() 实现细节。
+
+```
+def wait(self):
+    try:
+        while True:
+            sleep(1)
+    except KeyboardInterrupt:
+        pass
+```
+
+#### `src/httpx/_server.py` L44-58  — *medium confidence*
+
+**考虑在 endpoint 异常路径中主动关闭连接而非继续 keepalive 逻辑**
+
+当 endpoint 抛出异常发送 500 后，连接状态不可预期，继续执行 stream.read() 和 _reset() 存在风险。可以在 except 块末尾调用 self._parser.close() 并 break，确保连接被干净关闭。
+
+```
+except Exception:
+    logger.error("Internal Server Error", exc_info=True)
+    content = Text("Internal Server Error")
+    err = Response(500, content=content)
+    self._send_head(err)
+    self._send_body(err)
+    self._parser.close()  # 关闭连接，不再 keepalive
+    break
+```
+
+#### `src/ahttpx/_server.py` L57-58  — *medium confidence*
+
+**无论是否 keep-alive，都应消费完请求体再 reset**
+
+将 `await stream.read()` 移到 `if self._parser.is_keepalive():` 判断之外，确保每次请求处理完毕后请求体都被完整消费，避免解析器状态残留影响后续逻辑或关闭流程。
+
+```
+await stream.read()  # Drain any unread request body
+await self._reset()
+```
+
+#### `src/ahttpx/_server.py` L133  — *high confidence*
+
+**硬编码的监听地址和端口应改为可配置参数**
+
+`serve_http` 中硬编码了 `"127.0.0.1"` 和 `8080`，建议将其作为函数参数暴露出去，提升灵活性。
+
+```
+async def serve_http(endpoint, host="127.0.0.1", port=8080):
+```
