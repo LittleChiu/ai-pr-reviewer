@@ -43,6 +43,7 @@ interface StreamState {
   files: Map<string, FileProgress>;
   finalReport: ReviewReport | null;
   errorMsg: string | null;
+  visionAnalyzed: number;
 }
 
 const initState: StreamState = {
@@ -53,6 +54,7 @@ const initState: StreamState = {
   files: new Map(),
   finalReport: null,
   errorMsg: null,
+  visionAnalyzed: 0,
 };
 
 export default function Home() {
@@ -204,6 +206,7 @@ function applyEvent(s: StreamState, ev: StreamEvent): StreamState {
         summary: ev.data.summary,
         highlights: ev.data.highlights,
         files,
+        visionAnalyzed: ev.data.vision_analyzed ?? 0,
       };
     }
     case "file_started": {
@@ -269,6 +272,12 @@ function StreamView({
             <span className="text-[var(--foreground)]">{state.prInfo.title}</span>
             <span>·</span>
             <code className="text-[var(--accent)]">{state.prInfo.model}</code>
+            {state.visionAnalyzed > 0 && (
+              <>
+                <span>·</span>
+                <span className="text-[var(--accent)]">🖼️ 已分析 {state.visionAnalyzed} 张截图</span>
+              </>
+            )}
           </div>
         </Card>
       )}
