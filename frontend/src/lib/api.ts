@@ -1,7 +1,7 @@
 import type { ReviewReport, RiskItem, Suggestion } from "./types";
 
 const DEFAULT_API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 const ERROR_FRIENDLY: Record<string, string> = {
   PR_NOT_FOUND: "PR 不存在或仓库不公开。请检查链接。",
