@@ -15,8 +15,13 @@ from app.core.config import get_settings
 from app.services.github_schema import PRAuthor, PRBundle, PRFile, PRMetadata
 from app.services.pr_url import PRRef
 
-GITHUB_API = "https://api.github.com"
-RAW_HOST = "https://raw.githubusercontent.com"
+
+def _github_api() -> str:
+    return get_settings().github_api_base
+
+
+def _raw_host() -> str:
+    return get_settings().github_raw_base
 
 
 class GitHubError(Exception):
@@ -74,7 +79,7 @@ class GitHubClient:
         return res
 
     async def fetch_pr_metadata(self, ref: PRRef) -> PRMetadata:
-        url = f"{GITHUB_API}/repos/{ref.owner}/{ref.repo}/pulls/{ref.number}"
+        url = f"{_github_api()}/repos/{ref.owner}/{ref.repo}/pulls/{ref.number}"
         res = await self._get(url)
         d = res.json()
         return PRMetadata(
@@ -109,7 +114,7 @@ class GitHubClient:
         per_page = 100
         while len(files) < max_files:
             url = (
-                f"{GITHUB_API}/repos/{ref.owner}/{ref.repo}/pulls/{ref.number}/files"
+                f"{_github_api()}/repos/{ref.owner}/{ref.repo}/pulls/{ref.number}/files"
                 f"?per_page={per_page}&page={page}"
             )
             res = await self._get(url)
@@ -138,13 +143,13 @@ class GitHubClient:
         return files
 
     async def fetch_pr_diff(self, ref: PRRef) -> str:
-        url = f"{GITHUB_API}/repos/{ref.owner}/{ref.repo}/pulls/{ref.number}"
+        url = f"{_github_api()}/repos/{ref.owner}/{ref.repo}/pulls/{ref.number}"
         res = await self._get(url, headers={"Accept": "application/vnd.github.v3.diff"})
         return res.text
 
     async def fetch_file_at_ref(self, ref: PRRef, path: str, sha: str) -> str | None:
         """从 raw.githubusercontent.com 拿指定 commit 的文件全文。返回 None 表示不存在。"""
-        raw_url = f"{RAW_HOST}/{ref.owner}/{ref.repo}/{sha}/{path}"
+        raw_url = f"{_raw_host()}/{ref.owner}/{ref.repo}/{sha}/{path}"
         try:
             res = await self.client.get(raw_url)
         except httpx.HTTPError:
