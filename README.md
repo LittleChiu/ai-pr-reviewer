@@ -3,6 +3,7 @@
 > 粘贴 GitHub PR 链接，几秒看到总览，三十秒拿到带置信度的智能评审报告。
 
 [![CI](https://github.com/LittleChiu/ai-pr-reviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/LittleChiu/ai-pr-reviewer/actions/workflows/ci.yml)
+[![Docker](https://github.com/LittleChiu/ai-pr-reviewer/actions/workflows/docker.yml/badge.svg)](https://github.com/LittleChiu/ai-pr-reviewer/pkgs/container/ai-pr-reviewer%2Fbackend)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
@@ -54,12 +55,20 @@
 
 ## 🚀 快速开始
 
-最快方式 — Docker Compose:
+最快方式 — 从 GHCR 拉预构建镜像:
 
 ```bash
 cp .env.example .env  # 填 OPENAI_API_KEY
-docker compose up -d --build
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
 # 后端 :8000  前端 :3000
+```
+
+或本地 build:
+
+```bash
+cp .env.example .env
+docker compose up -d --build
 ```
 
 或本地开发(推荐 hot reload):
