@@ -124,7 +124,7 @@ ai-pr-reviewer/
 │   │   ├── api/            # /api/health, /api/pr/*, /api/review*
 │   │   ├── services/       # github_client, llm_client, reviewer*
 │   │   └── core/           # config.py, errors.py(统一错误处理)
-│   ├── tests/              # 38 个用例,含 respx mock 与流式编排
+│   ├── tests/              # 44 个用例,含 respx mock、流式编排、视觉分析
 │   └── Dockerfile          # python:3.11-slim + uv
 ├── frontend/               # Next.js 16 前端
 │   └── src/
