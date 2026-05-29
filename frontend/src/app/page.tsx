@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Confidence, ReviewReport, RiskItem, Severity, Suggestion } from "@/lib/types";
 import { ApiCallError, reviewPRStream, type StreamEvent } from "@/lib/api";
 import { HealthBadge } from "@/components/HealthBadge";
+import { useRecentUrls } from "@/lib/useRecentUrls";
+import { reportToMarkdown } from "@/lib/markdown";
 
 const SEVERITY_STYLES: Record<Severity, string> = {
   high: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900",
@@ -53,24 +55,45 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [state, setState] = useState<StreamState>(initState);
   const [error, setError] = useState<string | null>(null);
+  const { recent, push: pushRecent } = useRecentUrls();
+  const abortRef = useRef<AbortController | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim() || loading) return;
+    const trimmed = url.trim();
     setLoading(true);
     setError(null);
     setState({ ...initState, startedAt: Date.now(), files: new Map() });
+    pushRecent(trimmed);
+
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
 
     try {
-      await reviewPRStream(url.trim(), (ev: StreamEvent) => {
-        setState((s) => applyEvent(s, ev));
-      });
+      await reviewPRStream(
+        trimmed,
+        (ev: StreamEvent) => {
+          setState((s) => applyEvent(s, ev));
+        },
+        { signal: ctrl.signal },
+      );
     } catch (err) {
-      if (err instanceof ApiCallError) setError(err.detail);
-      else setError(err instanceof Error ? err.message : "未知错误");
+      if (ctrl.signal.aborted) {
+        setError("已取消");
+      } else if (err instanceof ApiCallError) {
+        setError(err.detail);
+      } else {
+        setError(err instanceof Error ? err.message : "未知错误");
+      }
     } finally {
       setLoading(false);
+      abortRef.current = null;
     }
+  };
+
+  const onCancel = () => {
+    abortRef.current?.abort();
   };
 
   return (
@@ -95,6 +118,7 @@ export default function Home() {
           <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="url"
+              list="recent-urls"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://github.com/owner/repo/pull/123"
@@ -102,13 +126,30 @@ export default function Home() {
               disabled={loading}
               className="flex-1 px-4 py-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
             />
-            <button
-              type="submit"
-              disabled={loading || !url.trim()}
-              className="px-6 py-3 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              {loading ? "分析中..." : "开始评审"}
-            </button>
+            {recent.length > 0 && (
+              <datalist id="recent-urls">
+                {recent.map((u) => (
+                  <option key={u} value={u} />
+                ))}
+              </datalist>
+            )}
+            {loading ? (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="px-6 py-3 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 text-sm font-medium hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+              >
+                取消
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!url.trim()}
+                className="px-6 py-3 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                开始评审
+              </button>
+            )}
           </div>
         </form>
 
@@ -120,7 +161,7 @@ export default function Home() {
 
         {!loading && !state.startedAt && !error && <EmptyState />}
 
-        {state.startedAt && <StreamView state={state} loading={loading} />}
+        {state.startedAt && <StreamView state={state} loading={loading} prUrl={url} />}
       </div>
     </div>
   );
@@ -182,7 +223,15 @@ function applyEvent(s: StreamState, ev: StreamEvent): StreamState {
   }
 }
 
-function StreamView({ state, loading }: { state: StreamState; loading: boolean }) {
+function StreamView({
+  state,
+  loading,
+  prUrl,
+}: {
+  state: StreamState;
+  loading: boolean;
+  prUrl: string;
+}) {
   const filesArr = Array.from(state.files.values());
   const allRisks = filesArr.flatMap((f) => f.risks);
   const allSuggestions = filesArr.flatMap((f) => f.suggestions);
@@ -257,16 +306,21 @@ function StreamView({ state, loading }: { state: StreamState; loading: boolean }
       )}
 
       {state.finalReport && (
-        <div className="text-xs text-zinc-400 dark:text-zinc-500 text-center pt-4 space-y-1">
-          <div>✓ 完成 · 总计耗时 {state.finalReport.elapsed_ms} ms</div>
-          {state.finalReport.token_usage && (
-            <div>
-              {state.finalReport.token_usage.llm_calls} 次 LLM 调用 ·{" "}
-              {state.finalReport.token_usage.prompt_tokens.toLocaleString()} prompt +{" "}
-              {state.finalReport.token_usage.completion_tokens.toLocaleString()} completion ={" "}
-              {state.finalReport.token_usage.total_tokens.toLocaleString()} tokens
-            </div>
-          )}
+        <div className="pt-4 space-y-3">
+          <div className="flex items-center justify-center">
+            <CopyMarkdownButton report={state.finalReport} prUrl={prUrl} />
+          </div>
+          <div className="text-xs text-zinc-400 dark:text-zinc-500 text-center space-y-1">
+            <div>✓ 完成 · 总计耗时 {state.finalReport.elapsed_ms} ms</div>
+            {state.finalReport.token_usage && (
+              <div>
+                {state.finalReport.token_usage.llm_calls} 次 LLM 调用 ·{" "}
+                {state.finalReport.token_usage.prompt_tokens.toLocaleString()} prompt +{" "}
+                {state.finalReport.token_usage.completion_tokens.toLocaleString()} completion ={" "}
+                {state.finalReport.token_usage.total_tokens.toLocaleString()} tokens
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -387,5 +441,36 @@ function EmptyState() {
         </code>
       </p>
     </div>
+  );
+}
+
+function CopyMarkdownButton({
+  report,
+  prUrl,
+}: {
+  report: ReviewReport;
+  prUrl: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const onCopy = async () => {
+    try {
+      const md = reportToMarkdown(report, prUrl);
+      await navigator.clipboard.writeText(md);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      className="px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 transition flex items-center gap-2"
+    >
+      <span>{copied ? "✓ 已复制" : "📋 复制为 Markdown"}</span>
+    </button>
   );
 }
