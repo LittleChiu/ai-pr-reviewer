@@ -130,6 +130,10 @@ await llm.chat_json(models=[primary_model, fallback_model], ...)
 - **commit-level 实时反馈**:每个 push 触发增量评审
 
 ### 6.5 视觉能力激活
-当前视觉模型已接通,但需要 yorhamc 网关把 \`gemini-3.1-flash-image\` 等视觉模型价格配上。激活后可:
+当前视觉模型已接通,但需要 yorhamc 网关把 `gemini-3.1-flash-image` 等视觉模型价格配上。激活后可:
 - 解析 PR 描述里的架构图截图,理解设计意图
 - 对前端 PR 自动跑视觉回归(部署预览 vs 旧版截图)
+
+## 七、Prompt 工程笔记
+
+更深入的 prompt 设计原则、踩过的坑、不同模型差异、未来调优方向 → 见 [docs/prompt-engineering.md](./prompt-engineering.md)。
