@@ -160,7 +160,7 @@ async def _triage(
         models=[model],
         system=TRIAGE_SYSTEM,
         user=_triage_user_prompt(bundle),
-        max_tokens=2048,
+        max_tokens=4096,
         temperature=0.2,
     )
     return extract_json(resp.content), resp.usage
@@ -178,7 +178,7 @@ async def _deep_review_one(
         models=[model],
         system=DEEP_REVIEW_SYSTEM,
         user=_deep_review_user_prompt(file, full_content, vision_context=vision_context),
-        max_tokens=2048,
+        max_tokens=4096,
         temperature=0.2,
     )
     return extract_json(resp.content), resp.usage
