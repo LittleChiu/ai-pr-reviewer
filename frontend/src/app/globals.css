@@ -1,26 +1,125 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafaf9;
+  --foreground: #18181b;
+
+  --card: rgba(255, 255, 255, 0.72);
+  --card-fg: #18181b;
+  --border: rgba(24, 24, 27, 0.08);
+  --muted: #f4f4f5;
+  --muted-fg: #71717a;
+
+  --primary: #6366f1;
+  --primary-fg: #ffffff;
+  --primary-soft: rgba(99, 102, 241, 0.1);
+
+  --accent: #a855f7;
+
+  --severity-high-bg: rgba(239, 68, 68, 0.08);
+  --severity-high-fg: #b91c1c;
+  --severity-high-bar: #ef4444;
+
+  --severity-medium-bg: rgba(245, 158, 11, 0.08);
+  --severity-medium-fg: #b45309;
+  --severity-medium-bar: #f59e0b;
+
+  --severity-low-bg: rgba(100, 116, 139, 0.06);
+  --severity-low-fg: #475569;
+  --severity-low-bar: #94a3b8;
+
+  --radius: 0.875rem;
+  --radius-sm: 0.5rem;
+  --radius-lg: 1.25rem;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 24px -8px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 12px 48px -16px rgba(0, 0, 0, 0.16);
+
+  --grad-bg: radial-gradient(
+      80% 50% at 18% 0%,
+      rgba(99, 102, 241, 0.12) 0%,
+      transparent 60%
+    ),
+    radial-gradient(60% 50% at 82% 8%, rgba(168, 85, 247, 0.1) 0%, transparent 60%),
+    radial-gradient(50% 40% at 50% 100%, rgba(236, 72, 153, 0.08) 0%, transparent 70%);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-fg);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-fg);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-fg);
+  --color-accent: var(--accent);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-lg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #09090b;
+    --foreground: #fafafa;
+
+    --card: rgba(24, 24, 27, 0.72);
+    --card-fg: #fafafa;
+    --border: rgba(255, 255, 255, 0.08);
+    --muted: #1f1f23;
+    --muted-fg: #a1a1aa;
+
+    --primary: #818cf8;
+    --primary-fg: #1e1b4b;
+    --primary-soft: rgba(129, 140, 248, 0.14);
+
+    --accent: #c084fc;
+
+    --severity-high-bg: rgba(239, 68, 68, 0.12);
+    --severity-high-fg: #fca5a5;
+    --severity-high-bar: #ef4444;
+
+    --severity-medium-bg: rgba(245, 158, 11, 0.12);
+    --severity-medium-fg: #fcd34d;
+    --severity-medium-bar: #f59e0b;
+
+    --severity-low-bg: rgba(100, 116, 139, 0.1);
+    --severity-low-fg: #cbd5e1;
+    --severity-low-bar: #64748b;
+
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 24px -8px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 12px 48px -16px rgba(0, 0, 0, 0.6);
+
+    --grad-bg: radial-gradient(
+        80% 50% at 18% 0%,
+        rgba(99, 102, 241, 0.18) 0%,
+        transparent 60%
+      ),
+      radial-gradient(60% 50% at 82% 8%, rgba(168, 85, 247, 0.14) 0%, transparent 60%),
+      radial-gradient(50% 40% at 50% 100%, rgba(236, 72, 153, 0.1) 0%, transparent 70%);
   }
 }
 
-body {
+html {
   background: var(--background);
+}
+
+body {
+  background: var(--grad-bg), var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--primary-soft);
+  color: var(--foreground);
 }
