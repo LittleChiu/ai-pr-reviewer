@@ -9,6 +9,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
 from openai import APIError, AsyncOpenAI
 
@@ -106,6 +107,48 @@ class LLMClient:
                     last_error = e
                     continue
         raise LLMError(f"所有候选模型都调用失败,最后一次错误: {last_error}")
+
+    async def analyze_images(
+        self,
+        *,
+        model: str,
+        image_urls: list[str],
+        prompt: str = "描述这张图片的内容,用中文回答。关注框架、架构、数据流等关键信息。",
+        max_tokens: int = 1024,
+        max_images: int = 3,
+    ) -> LLMResponse | None:
+        """用 vision 模型分析图片,返回文字描述。最多分析 max_images 张。
+
+        失败时返回 None(不抛异常),因为图片分析是评审的辅助信息,
+        不应因视觉模型不可用而阻塞主评审流程。
+        """
+        if not image_urls:
+            return None
+        urls = image_urls[:max_images]
+        content_parts: list[Any] = [{"type": "text", "text": prompt}]
+        for url in urls:
+            content_parts.append({"type": "image_url", "image_url": {"url": url}})
+        try:
+            logger.info("vision analysis: model=%s images=%d", model, len(urls))
+            resp = await self._client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": content_parts}],  # type: ignore[arg-type]
+                max_tokens=max_tokens,
+            )
+            text = (resp.choices[0].message.content or "").strip()
+            if not text:
+                logger.warning("vision model %s returned empty content", model)
+                return None
+            usage = TokenUsage()
+            if resp.usage is not None:
+                usage.prompt_tokens = resp.usage.prompt_tokens or 0
+                usage.completion_tokens = resp.usage.completion_tokens or 0
+                usage.total_tokens = resp.usage.total_tokens or 0
+            usage.llm_calls = 1
+            return LLMResponse(content=text, model=model, usage=usage)
+        except (APIError, LLMError) as e:
+            logger.warning("vision analysis failed for model %s: %s", model, e)
+            return None
 
 
 def extract_json(text: str) -> dict:
