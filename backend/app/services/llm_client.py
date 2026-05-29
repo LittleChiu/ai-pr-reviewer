@@ -65,35 +65,46 @@ class LLMClient:
         user: str,
         max_tokens: int = 4096,
         temperature: float = 0.2,
+        retries_per_model: int = 2,
     ) -> LLMResponse:
-        """按顺序尝试 models 中的模型,任一成功即返回。要求模型输出 JSON 字符串。"""
+        """按顺序尝试 models 中的模型,任一成功即返回。要求模型输出 JSON 字符串。
+
+        每个模型支持 retries_per_model 次重试(默认 2 次,共 3 次尝试)。
+        网关偶尔返回空内容或瞬时抖动,重试通常能恢复。
+        """
         last_error: Exception | None = None
         for model in models:
-            try:
-                logger.info("LLM call: model=%s", model)
-                resp = await self._client.chat.completions.create(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user},
-                    ],
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                )
-                content = (resp.choices[0].message.content or "").strip()
-                if not content:
-                    raise LLMError(f"模型 {model} 返回空内容")
-                usage = TokenUsage()
-                if resp.usage is not None:
-                    usage.prompt_tokens = resp.usage.prompt_tokens or 0
-                    usage.completion_tokens = resp.usage.completion_tokens or 0
-                    usage.total_tokens = resp.usage.total_tokens or 0
-                usage.llm_calls = 1
-                return LLMResponse(content=content, model=model, usage=usage)
-            except (APIError, LLMError) as e:
-                logger.warning("LLM model %s failed: %s", model, e)
-                last_error = e
-                continue
+            for attempt in range(retries_per_model + 1):
+                try:
+                    logger.info(
+                        "LLM call: model=%s (attempt %d/%d)",
+                        model,
+                        attempt + 1,
+                        retries_per_model + 1,
+                    )
+                    resp = await self._client.chat.completions.create(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": system},
+                            {"role": "user", "content": user},
+                        ],
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                    )
+                    content = (resp.choices[0].message.content or "").strip()
+                    if not content:
+                        raise LLMError(f"模型 {model} 返回空内容")
+                    usage = TokenUsage()
+                    if resp.usage is not None:
+                        usage.prompt_tokens = resp.usage.prompt_tokens or 0
+                        usage.completion_tokens = resp.usage.completion_tokens or 0
+                        usage.total_tokens = resp.usage.total_tokens or 0
+                    usage.llm_calls = 1
+                    return LLMResponse(content=content, model=model, usage=usage)
+                except (APIError, LLMError) as e:
+                    logger.warning("LLM model %s attempt %d failed: %s", model, attempt + 1, e)
+                    last_error = e
+                    continue
         raise LLMError(f"所有候选模型都调用失败,最后一次错误: {last_error}")
 
 

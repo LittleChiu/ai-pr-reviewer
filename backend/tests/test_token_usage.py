@@ -88,7 +88,6 @@ async def test_layered_token_usage_accumulates() -> None:
         llm=fake,  # type: ignore[arg-type]
         gh=None,
         primary_model="P",
-        fast_model="F",
     )
 
     # triage(1) + deep(2) = 3 次调用

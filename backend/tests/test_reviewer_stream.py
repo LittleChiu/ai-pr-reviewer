@@ -88,7 +88,6 @@ async def test_stream_event_sequence() -> None:
         llm=fake,  # type: ignore[arg-type]
         gh=None,
         primary_model="P",
-        fast_model="F",
     ):
         events.append(ev)
 
@@ -120,7 +119,6 @@ async def test_stream_triage_failure_yields_error() -> None:
         llm=BadLLM([]),  # type: ignore[arg-type]
         gh=None,
         primary_model="P",
-        fast_model="F",
     ):
         events.append(ev)
 
