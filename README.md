@@ -48,7 +48,7 @@
 | LLM | DeepSeek V4 (主) + Claude 4.6 (兜底) + Gemini 3.1 (视觉) | 通过 OpenAI 兼容协议接 yorhamc 中转 |
 | 部署 | 前端 Vercel · 后端自建 + Cloudflare Tunnel | Vercel 60s 超时跑不完 LLM 评审 |
 
-完整方案见 [PLAN.md](./PLAN.md)，架构图见 [docs/architecture.md](./docs/architecture.md)。
+完整方案见 [PLAN.md](./PLAN.md)，架构图见 [docs/architecture.md](./docs/architecture.md)。后端启动后访问 `http://localhost:8000/docs` 可看自动生成的 OpenAPI 文档。
 
 ## 🚀 快速开始
 
