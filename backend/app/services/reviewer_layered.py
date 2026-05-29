@@ -1,6 +1,6 @@
 """三层 prompt 评审策略。
 
-第一层 — 粗筛 (fast_model):
+第一层 — 粗筛 (primary_model):
   输入: PR metadata + 文件清单(不带 diff)
   输出: 整体 summary + highlights + 每个文件的 attention 等级(deep/normal/skip)
 
@@ -141,11 +141,10 @@ async def _triage(
     bundle: PRBundle,
     llm: LLMClient,
     *,
-    fast_model: str,
-    fallback_model: str,
+    model: str,
 ) -> tuple[dict, TokenUsage]:
     resp = await llm.chat_json(
-        models=[fast_model, fallback_model],
+        models=[model],
         system=TRIAGE_SYSTEM,
         user=_triage_user_prompt(bundle),
         max_tokens=2048,
@@ -159,11 +158,10 @@ async def _deep_review_one(
     full_content: str | None,
     llm: LLMClient,
     *,
-    primary_model: str,
-    fallback_model: str,
+    model: str,
 ) -> tuple[dict, TokenUsage]:
     resp = await llm.chat_json(
-        models=[primary_model, fallback_model],
+        models=[model],
         system=DEEP_REVIEW_SYSTEM,
         user=_deep_review_user_prompt(file, full_content),
         max_tokens=2048,
@@ -182,22 +180,19 @@ async def review_pr_layered(
     llm: LLMClient | None = None,
     gh: GitHubClient | None = None,
     primary_model: str | None = None,
-    fast_model: str | None = None,
     deep_concurrency: int = 3,
     max_deep_files: int = 8,
 ) -> ReviewReport:
     """三层评审。返回的 ReviewReport.model 字段记录主模型名。"""
     s = get_settings()
     pm = primary_model or s.primary_model
-    fm = fast_model or s.fast_model
-    fb = s.fallback_model
     client = llm or LLMClient()
 
     t0 = time.time()
     total_usage = TokenUsage()
 
     # 第一层:粗筛
-    triage, triage_usage = await _triage(bundle, client, fast_model=fm, fallback_model=fb)
+    triage, triage_usage = await _triage(bundle, client, model=pm)
     total_usage.add(triage_usage)
     summary = triage.get("summary", "")
     highlights = triage.get("highlights", []) or []
@@ -229,9 +224,7 @@ async def review_pr_layered(
                 except Exception:
                     full_content = None
             try:
-                return await _deep_review_one(
-                    f, full_content, client, primary_model=pm, fallback_model=fb
-                )
+                return await _deep_review_one(f, full_content, client, model=pm)
             except Exception as e:
                 logger.warning("deep review failed for %s: %s", f.filename, e)
                 return ({"risks": [], "suggestions": []}, TokenUsage())
@@ -296,15 +289,12 @@ async def review_pr_layered_stream(
     llm: LLMClient | None = None,
     gh: GitHubClient | None = None,
     primary_model: str | None = None,
-    fast_model: str | None = None,
     deep_concurrency: int = 3,
     max_deep_files: int = 8,
 ) -> AsyncIterator[ReviewEvent]:
     """流式三层评审。逐阶段产出事件,适合 SSE。"""
     s = get_settings()
     pm = primary_model or s.primary_model
-    fm = fast_model or s.fast_model
-    fb = s.fallback_model
     client = llm or LLMClient()
 
     t0 = time.time()
@@ -324,7 +314,7 @@ async def review_pr_layered_stream(
 
     # 第一层
     try:
-        triage, triage_usage = await _triage(bundle, client, fast_model=fm, fallback_model=fb)
+        triage, triage_usage = await _triage(bundle, client, model=pm)
     except Exception as e:
         logger.exception("triage failed")
         yield ReviewEvent("error", {"stage": "triage", "message": str(e)})
@@ -371,9 +361,7 @@ async def review_pr_layered_stream(
                 except Exception:
                     full_content = None
             try:
-                res, usage = await _deep_review_one(
-                    f, full_content, client, primary_model=pm, fallback_model=fb
-                )
+                res, usage = await _deep_review_one(f, full_content, client, model=pm)
                 await queue.put((f, res, usage))
             except Exception as e:
                 logger.warning("deep review failed for %s: %s", f.filename, e)

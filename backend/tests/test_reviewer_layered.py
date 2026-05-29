@@ -121,14 +121,13 @@ async def test_layered_review_triage_then_deep() -> None:
         llm=fake,  # type: ignore[arg-type]
         gh=None,
         primary_model="P",
-        fast_model="F",
     )
 
     # 1 次粗筛 + 2 次深审(b.py 被 skip)
     assert len(fake.calls) == 3
-    # 粗筛使用 fast_model
-    assert fake.calls[0]["models"][0] == "F"
-    # 深审使用 primary_model
+    # 粗筛和深审都用 primary_model
+    assert fake.calls[0]["models"][0] == "P"
+    # 深审同样使用 primary_model
     assert fake.calls[1]["models"][0] == "P"
     assert fake.calls[2]["models"][0] == "P"
 
@@ -156,7 +155,6 @@ async def test_layered_review_no_deep_files() -> None:
         llm=fake,  # type: ignore[arg-type]
         gh=None,
         primary_model="P",
-        fast_model="F",
     )
     assert len(fake.calls) == 1  # 只触发粗筛
     assert report.summary == "纯文档"
@@ -197,7 +195,6 @@ async def test_layered_review_handles_deep_failure() -> None:
         llm=flaky,  # type: ignore[arg-type]
         gh=None,
         primary_model="P",
-        fast_model="F",
     )
     assert report.summary == "test"
     assert report.risks == []

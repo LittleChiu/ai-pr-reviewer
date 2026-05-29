@@ -16,9 +16,7 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://yorhamc.com/v1"
 
     primary_model: str = "deepseek-v4-pro-max"
-    fast_model: str = "deepseek-v4-flash"
     vision_model: str = "gemini-3.1-flash-lite"
-    fallback_model: str = "claude-sonnet-4-6"
 
     github_token: str = ""
     github_api_base: str = "https://api.kkgithub.com"
