@@ -156,6 +156,10 @@ ai-pr-reviewer/
 - 加入团队规范的个性化评审
 - 加入 GitHub App 集成(自动监听 PR 事件,以 review comment 回写)
 
+## 🔧 排障
+
+常见部署和运行问题见 [docs/troubleshooting.md](./docs/troubleshooting.md)。
+
 ## 📜 License
 
 MIT
