@@ -26,8 +26,6 @@
 
 **真实开源 PR 实测**:见 [docs/showcases/](./docs/showcases/) — 我们对 3 个公开仓库的真实 PR(fastapi、httpx)跑了一遍评审,直接抓到例如「`await` 同步文件对象的 TypeError」、「`os.path.getsize` 频繁系统调用」这类真实工程问题。
 
-**Demo 视频脚本**:见 [docs/demo-script.md](./docs/demo-script.md) — 4-5 分钟,覆盖核心功能、差异化亮点、真实 PR showcase、技术架构。
-
 ## 🆚 为什么和直接用 ChatGPT 不一样
 
 通用「贴 diff 给 ChatGPT」的痛点：**只看 diff，不看上下文**。结果就是误报多、建议空泛。
@@ -141,7 +139,6 @@ ai-pr-reviewer/
 │   ├── product-research.md # 产品需求调研与同类对比
 │   ├── extending.md        # 6 个扩展点的落地步骤
 │   ├── deploy.md           # 本地与生产部署(含 Docker)
-│   ├── demo-script.md      # Demo 视频脚本(4-5 分钟)
 │   └── showcases/          # 3 个真实 PR 评审样例(md + json)
 ├── docker-compose.yml      # 一行命令起前后端
 ├── Makefile                # make help / make ci / make dev ...
