@@ -36,6 +36,30 @@ pnpm dev
 
 ## 生产部署
 
+### 方式一:Docker Compose(自托管,一行命令起)
+
+适合自建服务器或 VPS,前后端一起跑:
+
+```bash
+# 在仓库根目录
+cp .env.example .env  # 填入 OPENAI_API_KEY 等
+docker compose up -d --build
+
+# 查看日志
+docker compose logs -f backend
+
+# 停止
+docker compose down
+```
+
+服务起来后:
+- 后端 <http://localhost:8000>
+- 前端 <http://localhost:3000>
+
+要让公网访问,前置一层 nginx/Caddy/Cloudflare Tunnel 就行。
+
+### 方式二:前端 Vercel + 后端自建
+
 ### 前端 → Vercel
 
 1. 在 <https://vercel.com> 用 GitHub 登录,导入 `LittleChiu/ai-pr-reviewer`
@@ -72,7 +96,7 @@ cloudflared tunnel run ai-pr-reviewer
 
 ### 为什么不前后端都放 Vercel?
 
-Vercel Functions 有 60 秒超时,LLM 评审一轮通常 20-90s,大 PR 可能更长。把后端放本地/自建服务器,既能用 GPU 资源,又不受云厂商运行时限制。
+Vercel Functions 有 60 秒超时,LLM 评审一轮通常 20-90s,大 PR 可能更长。把后端放自建服务器或选 Docker Compose 部署,不受云厂商运行时限制。
 
 ## 环境变量速查
 
