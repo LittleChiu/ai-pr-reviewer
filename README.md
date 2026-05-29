@@ -19,6 +19,8 @@
 
 > Demo 视频链接将在 D3 完成补上
 
+**真实开源 PR 实测**:见 [docs/showcases/](./docs/showcases/) — 我们对 3 个公开仓库的真实 PR(fastapi、httpx)跑了一遍评审,直接抓到例如「`await` 同步文件对象的 TypeError」、「`os.path.getsize` 频繁系统调用」这类真实工程问题。
+
 ## 🆚 为什么和直接用 ChatGPT 不一样
 
 通用「贴 diff 给 ChatGPT」的痛点：**只看 diff，不看上下文**。结果就是误报多、建议空泛。
