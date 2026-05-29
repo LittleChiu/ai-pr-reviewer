@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     fallback_model: str = "claude-sonnet-4-6"
 
     github_token: str = ""
+    github_api_base: str = "https://api.kkgithub.com"
+    github_raw_base: str = "https://raw.kkgithub.com"
 
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
