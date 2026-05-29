@@ -36,29 +36,36 @@ pnpm dev
 
 ## 生产部署
 
-### 方式一:Docker Compose(自托管,一行命令起)
+### 方式一(最快):从 GHCR 拉预构建镜像
 
-适合自建服务器或 VPS,前后端一起跑:
+每次 main 分支推送会自动构建多架构(amd64 + arm64)镜像并推到
+[GitHub Container Registry](https://github.com/LittleChiu/ai-pr-reviewer/pkgs/container).
+
+只需要 `docker compose` 与 `.env`:
 
 ```bash
-# 在仓库根目录
-cp .env.example .env  # 填入 OPENAI_API_KEY 等
-docker compose up -d --build
-
-# 查看日志
-docker compose logs -f backend
-
-# 停止
-docker compose down
+cp .env.example .env  # 编辑填入 OPENAI_API_KEY
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-服务起来后:
-- 后端 <http://localhost:8000>
-- 前端 <http://localhost:3000>
+镜像 tag 策略:
+- `latest` — 跟随 main 滚动(默认)
+- `sha-<commit>` — 固定到特定 commit,推荐生产用
+- `v<version>` — semver tag(打 git tag `v0.1.0` 时自动构建)
 
-要让公网访问,前置一层 nginx/Caddy/Cloudflare Tunnel 就行。
+固定到 sha:`IMAGE_TAG=sha-3845d4d docker compose -f docker-compose.prod.yml up -d`
 
-### 方式二:前端 Vercel + 后端自建
+### 方式二:本地 build Docker Compose
+
+适合内网环境或想自定义镜像:
+
+```bash
+cp .env.example .env
+docker compose up -d --build  # 用 docker-compose.yml,本地 build
+```
+
+### 方式三:前端 Vercel + 后端自建
 
 ### 前端 → Vercel
 
