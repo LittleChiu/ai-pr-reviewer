@@ -31,7 +31,7 @@
 │   ├─ github_client.py        异步 httpx + raw.githubusercontent  │
 │   ├─ reviewer.py             single 策略                          │
 │   ├─ reviewer_layered.py     layered 策略 + 流式                  │
-│   ├─ llm_client.py           OpenAI 兼容 + fallback 链            │
+│   ├─ llm_client.py           OpenAI 兼容 + 模型调用 + 同模型重试     │
 │   ├─ github_schema.py        GitHub 数据 pydantic 模型            │
 │   └─ review_schema.py        ReviewReport pydantic 模型           │
 │                                                                  │
@@ -44,7 +44,7 @@
 │ - pulls/N            │              │ https://your-gateway.example.com/v1           │
 │ - pulls/N/files      │              │ (OpenAI 兼容协议)        │
 │ - 文件全文           │              │                          │
-│ raw.githubusercontent│              │ deepseek / claude / gemini│
+│ raw.githubusercontent│              │ deepseek / gemini / ...    │
 └──────────────────────┘              └──────────────────────────┘
 ```
 
@@ -58,7 +58,7 @@
   │                    │◀──────────── metadata + files│
   │◀ event: started ───│                │            │
   │                    │                │            │
-  │                    ├ triage(fast)──▶│            │
+  │                    ├ triage(primary)─▶│            │
   │                    │◀──────────── summary+attention
   │◀ event: triage ────│                │            │
   │                    │                │            │
