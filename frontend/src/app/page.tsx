@@ -7,17 +7,22 @@ import { HealthBadge } from "@/components/HealthBadge";
 import { useRecentUrls } from "@/lib/useRecentUrls";
 import { reportToMarkdown } from "@/lib/markdown";
 
-const SEVERITY_STYLES: Record<Severity, string> = {
-  high: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900",
-  medium:
-    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900",
-  low: "bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800",
+const SEVERITY_BAR: Record<Severity, string> = {
+  high: "bg-[var(--severity-high-bar)]",
+  medium: "bg-[var(--severity-medium-bar)]",
+  low: "bg-[var(--severity-low-bar)]",
 };
 
-const CONFIDENCE_STYLES: Record<Confidence, string> = {
-  high: "text-emerald-600 dark:text-emerald-400",
-  medium: "text-zinc-500 dark:text-zinc-400",
-  low: "text-zinc-400 dark:text-zinc-500",
+const SEVERITY_TINT: Record<Severity, string> = {
+  high: "bg-[var(--severity-high-bg)] text-[var(--severity-high-fg)]",
+  medium: "bg-[var(--severity-medium-bg)] text-[var(--severity-medium-fg)]",
+  low: "bg-[var(--severity-low-bg)] text-[var(--severity-low-fg)]",
+};
+
+const CONFIDENCE_DOT: Record<Confidence, string> = {
+  high: "bg-emerald-500",
+  medium: "bg-zinc-400",
+  low: "bg-zinc-300 dark:bg-zinc-600",
 };
 
 type FileStatus = "pending" | "running" | "done" | "error";
@@ -97,65 +102,80 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="mx-auto max-w-4xl px-6 py-12">
-        <header className="mb-12">
-          <div className="flex items-start justify-between gap-4 mb-3">
+    <div className="min-h-screen">
+      <div className="mx-auto max-w-4xl px-6 py-12 md:py-16">
+        <header className="mb-10">
+          <div className="flex items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-3">
-              <div className="text-3xl">🤖</div>
-              <h1 className="text-2xl font-semibold tracking-tight">
-                AI PR Review
-              </h1>
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 flex items-center justify-center text-white text-lg shadow-md">
+                🤖
+              </div>
+              <div>
+                <h1 className="text-xl md:text-2xl font-semibold tracking-tight">
+                  AI PR Review
+                </h1>
+                <p className="text-xs text-[var(--muted-fg)] mt-0.5">
+                  Smart code review · Streaming · Confidence-aware
+                </p>
+              </div>
             </div>
             <HealthBadge />
           </div>
-          <p className="text-zinc-600 dark:text-zinc-400 text-sm">
-            粘贴 GitHub PR 链接,基于三层 prompt 流式返回带置信度的智能评审报告。
-          </p>
         </header>
 
-        <form onSubmit={onSubmit} className="mb-8">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="url"
-              list="recent-urls"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://github.com/owner/repo/pull/123"
-              required
-              disabled={loading}
-              className="flex-1 px-4 py-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-            />
-            {recent.length > 0 && (
-              <datalist id="recent-urls">
-                {recent.map((u) => (
-                  <option key={u} value={u} />
-                ))}
-              </datalist>
-            )}
-            {loading ? (
-              <button
-                type="button"
-                onClick={onCancel}
-                className="px-6 py-3 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 text-sm font-medium hover:bg-red-50 dark:hover:bg-red-950/40 transition"
-              >
-                取消
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={!url.trim()}
-                className="px-6 py-3 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                开始评审
-              </button>
-            )}
-          </div>
-        </form>
+        <Card className="p-2 mb-8">
+          <form onSubmit={onSubmit}>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex-1 relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--muted-fg)] text-sm pointer-events-none">
+                  🔗
+                </span>
+                <input
+                  type="url"
+                  list="recent-urls"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repo/pull/123"
+                  required
+                  disabled={loading}
+                  className="w-full pl-10 pr-4 py-3 rounded-[var(--radius-sm)] bg-transparent text-sm focus:outline-none disabled:opacity-50"
+                />
+                {recent.length > 0 && (
+                  <datalist id="recent-urls">
+                    {recent.map((u) => (
+                      <option key={u} value={u} />
+                    ))}
+                  </datalist>
+                )}
+              </div>
+              {loading ? (
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="px-5 py-3 rounded-[var(--radius-sm)] border border-[var(--border)] text-[var(--severity-high-fg)] text-sm font-medium hover:bg-[var(--severity-high-bg)] transition"
+                >
+                  取消
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!url.trim()}
+                  className="px-5 py-3 rounded-[var(--radius-sm)] bg-[var(--primary)] text-[var(--primary-fg)] text-sm font-medium shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  开始评审
+                </button>
+              )}
+            </div>
+          </form>
+        </Card>
 
         {error && (
-          <div className="mb-8 p-4 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900 text-sm text-red-700 dark:text-red-300">
-            <strong>评审失败:</strong> {error}
+          <div className="mb-8 p-4 rounded-[var(--radius)] bg-[var(--severity-high-bg)] text-[var(--severity-high-fg)] text-sm flex items-start gap-3">
+            <span>⚠️</span>
+            <div>
+              <strong>评审失败</strong>
+              <div className="mt-1 opacity-90">{error}</div>
+            </div>
           </div>
         )}
 
@@ -239,49 +259,52 @@ function StreamView({
   const doneCount = filesArr.filter((f) => f.status === "done" || f.status === "error").length;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {state.prInfo && (
-        <div className="text-xs text-zinc-500 dark:text-zinc-400 flex flex-wrap gap-3 items-center">
-          <code className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900">
-            {state.prInfo.pr}
-          </code>
-          <span>·</span>
-          <span>{state.prInfo.title}</span>
-          <span>·</span>
-          <code>{state.prInfo.model}</code>
-        </div>
+        <Card className="px-5 py-3">
+          <div className="text-xs text-[var(--muted-fg)] flex flex-wrap gap-x-3 gap-y-1 items-center">
+            <code className="px-2 py-0.5 rounded-md bg-[var(--muted)] text-[var(--foreground)]">
+              {state.prInfo.pr}
+            </code>
+            <span className="text-[var(--foreground)]">{state.prInfo.title}</span>
+            <span>·</span>
+            <code className="text-[var(--accent)]">{state.prInfo.model}</code>
+          </div>
+        </Card>
       )}
 
       {state.summary && (
         <Section title="📋 PR 总览">
-          <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
-            {state.summary}
-          </p>
+          <Card className="p-5">
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">{state.summary}</p>
+          </Card>
         </Section>
       )}
 
       {state.highlights.length > 0 && (
         <Section title="✨ 亮点">
-          <ul className="space-y-2 text-sm">
-            {state.highlights.map((h, i) => (
-              <li key={i} className="flex gap-2 text-zinc-700 dark:text-zinc-300">
-                <span className="text-emerald-500">▸</span>
-                <span>{h}</span>
-              </li>
-            ))}
-          </ul>
+          <Card className="p-5">
+            <ul className="space-y-2 text-sm">
+              {state.highlights.map((h, i) => (
+                <li key={i} className="flex gap-2.5">
+                  <span className="text-emerald-500 mt-0.5">▸</span>
+                  <span>{h}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
         </Section>
       )}
 
       {totalCount > 0 && (
-        <Section
-          title={`🔍 文件深审 (${doneCount}/${totalCount})`}
-        >
-          <div className="space-y-2">
-            {filesArr.map((f) => (
-              <FileProgressItem key={f.file} f={f} />
-            ))}
-          </div>
+        <Section title={`🔍 文件深审 (${doneCount}/${totalCount})`}>
+          <Card className="p-4">
+            <div className="space-y-1.5">
+              {filesArr.map((f) => (
+                <FileProgressItem key={f.file} f={f} />
+              ))}
+            </div>
+          </Card>
         </Section>
       )}
 
@@ -306,12 +329,12 @@ function StreamView({
       )}
 
       {state.finalReport && (
-        <div className="pt-4 space-y-3">
+        <div className="pt-2 space-y-3">
           <div className="flex items-center justify-center">
             <CopyMarkdownButton report={state.finalReport} prUrl={prUrl} />
           </div>
-          <div className="text-xs text-zinc-400 dark:text-zinc-500 text-center space-y-1">
-            <div>✓ 完成 · 总计耗时 {state.finalReport.elapsed_ms} ms</div>
+          <div className="text-xs text-[var(--muted-fg)] text-center space-y-1">
+            <div>✓ 完成 · 总计耗时 {(state.finalReport.elapsed_ms / 1000).toFixed(1)} s</div>
             {state.finalReport.token_usage && (
               <div>
                 {state.finalReport.token_usage.llm_calls} 次 LLM 调用 ·{" "}
@@ -325,8 +348,8 @@ function StreamView({
       )}
 
       {loading && !state.finalReport && (
-        <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
-          <div className="h-4 w-4 rounded-full border-2 border-zinc-300 border-t-transparent animate-spin" />
+        <div className="flex items-center gap-3 text-sm text-[var(--muted-fg)]">
+          <div className="h-3.5 w-3.5 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin" />
           流式处理中...
         </div>
       )}
@@ -337,23 +360,27 @@ function StreamView({
 function FileProgressItem({ f }: { f: FileProgress }) {
   const dot =
     f.status === "running"
-      ? "bg-blue-500 animate-pulse"
+      ? "bg-[var(--primary)] animate-pulse"
       : f.status === "done"
         ? "bg-emerald-500"
         : f.status === "error"
-          ? "bg-red-500"
-          : "bg-zinc-300 dark:bg-zinc-700";
+          ? "bg-[var(--severity-high-bar)]"
+          : "bg-[var(--muted-fg)] opacity-40";
   return (
-    <div className="flex items-center gap-3 text-xs">
-      <span className={`h-2 w-2 rounded-full ${dot}`} />
-      <code className="text-zinc-600 dark:text-zinc-400">{f.file}</code>
+    <div className="flex items-center gap-3 text-xs px-2 py-1 rounded-md hover:bg-[var(--muted)]/50">
+      <span className={`h-2 w-2 rounded-full shrink-0 ${dot}`} />
+      <code className="text-[var(--foreground)] font-mono truncate">{f.file}</code>
       {f.status === "done" && (f.risks.length > 0 || f.suggestions.length > 0) && (
-        <span className="text-zinc-400">
-          · {f.risks.length} risks · {f.suggestions.length} suggestions
+        <span className="text-[var(--muted-fg)] ml-auto">
+          {f.risks.length > 0 && (
+            <span className="text-[var(--severity-medium-fg)]">{f.risks.length} risks</span>
+          )}
+          {f.risks.length > 0 && f.suggestions.length > 0 && <span> · </span>}
+          {f.suggestions.length > 0 && <span>{f.suggestions.length} sug</span>}
         </span>
       )}
       {f.status === "error" && (
-        <span className="text-red-400">· {f.error ?? "失败"}</span>
+        <span className="text-[var(--severity-high-fg)] ml-auto">{f.error ?? "失败"}</span>
       )}
     </div>
   );
@@ -361,86 +388,104 @@ function FileProgressItem({ f }: { f: FileProgress }) {
 
 function RiskCard({ r }: { r: RiskItem }) {
   return (
-    <div className={`rounded-lg border p-4 ${SEVERITY_STYLES[r.severity]}`}>
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-mono uppercase">{r.severity}</span>
-          <span className="text-xs opacity-60">·</span>
-          <span className="text-xs opacity-60">{r.category}</span>
-          <span className="text-xs opacity-60">·</span>
-          <code className="text-xs">{r.file}</code>
-          {r.line_hint && (
-            <>
-              <span className="text-xs opacity-60">·</span>
-              <code className="text-xs">L{r.line_hint}</code>
-            </>
-          )}
+    <Card className="overflow-hidden">
+      <div className="flex">
+        <div className={`w-1 shrink-0 ${SEVERITY_BAR[r.severity]}`} />
+        <div className="flex-1 p-4 min-w-0">
+          <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span
+                className={`px-2 py-0.5 rounded-md font-mono uppercase font-medium ${SEVERITY_TINT[r.severity]}`}
+              >
+                {r.severity}
+              </span>
+              <span className="text-[var(--muted-fg)]">{r.category}</span>
+              <code className="text-[var(--muted-fg)]">{r.file}</code>
+              {r.line_hint && (
+                <code className="text-[var(--muted-fg)]">L{r.line_hint}</code>
+              )}
+            </div>
+            <ConfidencePill c={r.confidence} />
+          </div>
+          <h3 className="font-medium text-sm mb-1.5">{r.title}</h3>
+          <p className="text-sm text-[var(--muted-fg)] whitespace-pre-wrap leading-relaxed">
+            {r.detail}
+          </p>
         </div>
-        <span className={`text-xs ${CONFIDENCE_STYLES[r.confidence]}`}>
-          {r.confidence} confidence
-        </span>
       </div>
-      <h3 className="font-medium text-sm mb-1">{r.title}</h3>
-      <p className="text-sm opacity-80 whitespace-pre-wrap">{r.detail}</p>
-    </div>
+    </Card>
   );
 }
 
 function SuggestionCard({ s }: { s: Suggestion }) {
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 bg-white dark:bg-zinc-900">
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div className="flex items-center gap-2 flex-wrap text-xs text-zinc-500 dark:text-zinc-400">
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--muted-fg)]">
           <code>{s.file}</code>
-          {s.line_hint && (
-            <>
-              <span>·</span>
-              <code>L{s.line_hint}</code>
-            </>
-          )}
+          {s.line_hint && <code>L{s.line_hint}</code>}
         </div>
-        <span className={`text-xs ${CONFIDENCE_STYLES[s.confidence]}`}>
-          {s.confidence}
-        </span>
+        <ConfidencePill c={s.confidence} />
       </div>
-      <h3 className="font-medium text-sm mb-1">{s.title}</h3>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400 whitespace-pre-wrap">
+      <h3 className="font-medium text-sm mb-1.5">{s.title}</h3>
+      <p className="text-sm text-[var(--muted-fg)] whitespace-pre-wrap leading-relaxed">
         {s.detail}
       </p>
       {s.code_hint && (
-        <pre className="mt-2 p-3 rounded bg-zinc-50 dark:bg-zinc-950 text-xs overflow-x-auto">
+        <pre className="mt-3 p-3 rounded-md bg-[var(--muted)] text-xs overflow-x-auto">
           <code>{s.code_hint}</code>
         </pre>
       )}
-    </div>
+    </Card>
+  );
+}
+
+function ConfidencePill({ c }: { c: Confidence }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-fg)]">
+      <span className={`h-1.5 w-1.5 rounded-full ${CONFIDENCE_DOT[c]}`} />
+      {c} confidence
+    </span>
   );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="text-sm font-semibold mb-3 text-zinc-900 dark:text-zinc-100">
-        {title}
-      </h2>
+      <h2 className="text-sm font-semibold mb-3 px-1">{title}</h2>
       {children}
     </section>
   );
 }
 
+function Card({
+  className = "",
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`rounded-[var(--radius)] bg-[var(--card)] backdrop-blur border border-[var(--border)] shadow-[var(--shadow-sm)] ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
 function EmptyState() {
   return (
-    <div className="rounded-lg border border-dashed border-zinc-200 dark:border-zinc-800 p-12 text-center">
+    <Card className="p-12 text-center">
       <div className="text-4xl mb-3">📄</div>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        粘贴一个 GitHub PR 链接开始评审
-      </p>
-      <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-2">
+      <p className="text-sm text-[var(--foreground)]">粘贴一个 GitHub PR 链接开始评审</p>
+      <p className="text-xs text-[var(--muted-fg)] mt-2">
         支持公开仓库,例如{" "}
-        <code className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900">
+        <code className="px-1.5 py-0.5 rounded bg-[var(--muted)]">
           https://github.com/openai/openai-python/pull/1234
         </code>
       </p>
-    </div>
+    </Card>
   );
 }
 
@@ -468,7 +513,7 @@ function CopyMarkdownButton({
     <button
       type="button"
       onClick={onCopy}
-      className="px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 transition flex items-center gap-2"
+      className="px-4 py-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--card)] backdrop-blur text-xs hover:bg-[var(--muted)] transition flex items-center gap-2 shadow-[var(--shadow-sm)]"
     >
       <span>{copied ? "✓ 已复制" : "📋 复制为 Markdown"}</span>
     </button>
