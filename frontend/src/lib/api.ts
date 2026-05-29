@@ -116,6 +116,7 @@ export type StreamEvent =
         highlights: string[];
         deep_files: string[];
         skipped: string[];
+        vision_analyzed?: number;
       };
     }
   | { type: "file_started"; data: { file: string; changes: number } }
