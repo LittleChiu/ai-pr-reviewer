@@ -3,6 +3,10 @@
 > 粘贴 GitHub PR 链接，几秒看到总览，三十秒拿到带置信度的智能评审报告。
 
 [![CI](https://github.com/LittleChiu/ai-pr-reviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/LittleChiu/ai-pr-reviewer/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 
 > 七牛云 XEngineer 新工科计划 · 2026.05.29 批次 · 题三作品
 
@@ -128,12 +132,14 @@ ai-pr-reviewer/
 
 ## 🛣️ 未来扩展方向
 
-详见 [docs/model-strategy.md § 六](./docs/model-strategy.md#六未来扩展方向)：
+详见 [docs/extending.md](./docs/extending.md) — 包含 6 个主要扩展点的最小步骤说明:
 
-- GitHub App 直接集成,PR 创建即自动评审,以 review comment 形式回写
-- 类型推断辅助(LSP)/ 依赖图感知 / 仓库历史 review 风格学习
-- commit SHA 级别缓存,降低重复 token 消耗
-- 视觉能力激活:解析 PR 描述里的架构图截图
+- 加入新的 LLM 模型(改 `.env` 即可,无需改代码)
+- 加入新的评审策略(focused / domain-specific 等)
+- 接入新的代码托管平台(GitLab / Gitea)
+- 加入视觉理解能力(分析 PR 描述里的截图)
+- 加入团队规范的个性化评审
+- 加入 GitHub App 集成(自动监听 PR 事件,以 review comment 回写)
 
 ## 📜 License
 
