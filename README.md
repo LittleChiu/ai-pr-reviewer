@@ -21,6 +21,8 @@
 
 **真实开源 PR 实测**:见 [docs/showcases/](./docs/showcases/) — 我们对 3 个公开仓库的真实 PR(fastapi、httpx)跑了一遍评审,直接抓到例如「`await` 同步文件对象的 TypeError」、「`os.path.getsize` 频繁系统调用」这类真实工程问题。
 
+**Demo 视频脚本**:见 [docs/demo-script.md](./docs/demo-script.md) — 4-5 分钟,覆盖核心功能、差异化亮点、真实 PR showcase、技术架构。
+
 ## 🆚 为什么和直接用 ChatGPT 不一样
 
 通用「贴 diff 给 ChatGPT」的痛点：**只看 diff，不看上下文**。结果就是误报多、建议空泛。
@@ -46,12 +48,22 @@
 
 ## 🚀 快速开始
 
+最快方式 — Docker Compose:
+
+```bash
+cp .env.example .env  # 填 OPENAI_API_KEY
+docker compose up -d --build
+# 后端 :8000  前端 :3000
+```
+
+或本地开发(推荐 hot reload):
+
 ```bash
 # 一键启动前后端
 ./scripts/dev.sh
 ```
 
-或分别启动：
+或分别启动:
 
 ```bash
 # 后端
