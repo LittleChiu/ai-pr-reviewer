@@ -6,10 +6,10 @@ import { ApiCallError, checkHealth } from "@/lib/api";
 type Status = "checking" | "ok" | "no-llm" | "down";
 
 const META: Record<Status, { dot: string; text: string }> = {
-  checking: { dot: "bg-zinc-300 animate-pulse", text: "检查后端连接..." },
+  checking: { dot: "bg-[var(--muted-fg)] opacity-40 animate-pulse", text: "检查后端连接..." },
   ok: { dot: "bg-emerald-500", text: "后端在线" },
   "no-llm": { dot: "bg-amber-500", text: "后端在线,但未配置 LLM" },
-  down: { dot: "bg-red-500", text: "后端不可达" },
+  down: { dot: "bg-[var(--severity-high-bar)]", text: "后端不可达" },
 };
 
 export function HealthBadge() {
@@ -34,11 +34,11 @@ export function HealthBadge() {
 
   const m = META[status];
   return (
-    <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-      <span className={`h-2 w-2 rounded-full ${m.dot}`} />
+    <div className="flex items-center gap-2 text-xs text-[var(--muted-fg)] px-3 py-1.5 rounded-full bg-[var(--card)] backdrop-blur border border-[var(--border)] shadow-[var(--shadow-sm)]">
+      <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />
       <span>{m.text}</span>
       {status === "ok" && primary && (
-        <code className="text-zinc-400 dark:text-zinc-500">· {primary}</code>
+        <code className="text-[var(--accent)]">· {primary}</code>
       )}
     </div>
   );
