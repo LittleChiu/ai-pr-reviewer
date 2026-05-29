@@ -104,7 +104,7 @@ async def chat_json(self, *, models, ..., retries_per_model=2):
 
 ### 6.1 加入更多模型
 - **专家模型**:针对特定语言/框架(Rust / Python 安全等)
-- **本地推理**:5090 GPU 上跑本地模型，零延迟 + 零 token 成本
+- **本地推理**:本地部署模型，零延迟 + 零 token 成本
 - 只需在 Settings 加字段，reviewer 调用时传 `models=[...]`
 
 ### 6.2 上下文获取升级

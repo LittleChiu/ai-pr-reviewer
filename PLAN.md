@@ -56,9 +56,9 @@
 |---|---|---|
 | 后端 | **FastAPI** + uv 管包 | Python 生态做 LLM 接入最顺，PyGithub 直接用 |
 | 前端 | **Next.js 15 (App Router)** + Tailwind + shadcn/ui | 一键 Vercel 部署，UI 组件成熟 |
-| 数据 | **SQLite + SQLModel** | 缓存 PR 分析结果，轻量、零运维 |
+| 数据 | **SQLite + sqlite3** | 缓存 PR 分析结果，轻量、零运维 |
 | 任务 | **同步调用 + 流式输出（SSE）** | 不引 Celery/Redis，KISS |
-| 部署 | 后端：本地 + Cloudflare Tunnel；前端：Vercel | 后端有 GPU/可缓存，前端要 CDN |
+| 部署 | 后端：自建 + Cloudflare Tunnel；前端：Vercel | 后端可缓存/前端 CDN 加速 |
 | GitHub 接入 | **httpx + GitHub REST API**（不用 PyGithub）| PyGithub 同步阻塞，httpx 原生异步、可流式 |
 
 ### 2.3 关键设计决策
