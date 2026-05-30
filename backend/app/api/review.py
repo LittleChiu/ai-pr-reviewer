@@ -1,184 +1,139 @@
-"""/api/review 端点:输入 PR URL,返回评审报告。
+"""/api/review 端点:异步任务模式。
 
-支持两种 strategy:
-- "layered" (默认):三层 prompt(粗筛 → 深审 → 聚合),质量更高,token 消耗略大
-- "single":一轮 prompt + 完整 diff,响应快,适合小 PR
+POST /api/review        → 提交评审,返回 { task_id, status: "processing" }
+GET  /api/review/{id}   → 查询任务状态,完成时返回完整 ReviewReport
+GET  /api/review/{id}/wait → SSE 长轮询(保留兼容)
 
-另外提供 /api/review/stream:同样是 layered,但用 SSE 流式返回每阶段事件,
-让前端可以先看到 summary,再看到 risks 一条条到达。
-
-缓存:
-- 非流式 /api/review 命中缓存(repo + head_sha + strategy + model)直接返回
-- /api/review/stream 命中时直接 yield 一个完整的 cached 事件 + done,不重跑 LLM
-- ?force_refresh=true 跳过缓存
-
-错误处理:业务异常(PRNotFoundError / RateLimitedError / GitHubError / LLMError)
-由全局异常处理器(core/errors.py)统一转换为标准错误响应,无需在路由层 try/except。
+不再使用 SSE 流式推送,改为轮询——避免长连接在网关不稳时断开。
 """
 
 from __future__ import annotations
 
-import json
+import asyncio
 import logging
-from collections.abc import AsyncIterator
-from typing import Literal
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.core.config import get_settings
-from app.services.cache import ReviewCache, get_cache
-from app.services.github_client import (
-    GitHubClient,
-    GitHubError,
-    PRNotFoundError,
-    RateLimitedError,
-)
+from app.services.cache import get_cache
+from app.services.github_client import GitHubClient, GitHubError, PRNotFoundError, RateLimitedError
 from app.services.llm_client import LLMError
 from app.services.pr_url import PRRef, parse_pr_url
 from app.services.review_schema import ReviewReport
-from app.services.reviewer import review_pr
-from app.services.reviewer_layered import (
-    ReviewEvent,
-    review_pr_layered,
-    review_pr_layered_stream,
-)
+from app.services.reviewer_layered import review_pr_layered
+from app.services.task_manager import ReviewTask, get_task_manager
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-Strategy = Literal["layered", "single"]
 
 
 class ReviewRequest(BaseModel):
     url: str
     model: str | None = None
-    strategy: Strategy = "layered"
     force_refresh: bool = False
 
 
-def _cache_key(ref: PRRef, head_sha: str, strategy: str, model: str) -> str:
-    return ReviewCache.make_key(ref.owner, ref.repo, ref.number, head_sha, strategy, model)
+class TaskResponse(BaseModel):
+    task_id: str
+    status: str
+    result: ReviewReport | None = None
+    error: str | None = None
 
 
-@router.post("/review", response_model=ReviewReport)
-async def review(req: ReviewRequest) -> ReviewReport:
-    """对指定 PR 出评审报告。错误响应见全局异常处理器。"""
+def _cache_key(ref: PRRef, head_sha: str, model: str) -> str:
+    from app.services.cache import ReviewCache
+
+    return ReviewCache.make_key(ref.owner, ref.repo, ref.number, head_sha, "layered", model)
+
+
+async def _run_review(task: ReviewTask, ref: PRRef) -> None:
+    """后台执行评审,结果写入 task。所有异常都被捕获,标记错误状态。"""
     s = get_settings()
+    model = task.model or s.primary_model
     try:
-        ref = parse_pr_url(req.url)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        logger.info(
+            "task %s start: %s/%s#%s model=%s", task.task_id, ref.owner, ref.repo, ref.number, model
+        )
+        async with GitHubClient() as gh:
+            logger.info("task %s fetching PR data...", task.task_id)
+            bundle = await gh.fetch_pr_bundle(ref)
+            logger.info(
+                "task %s PR fetched: %d files, +%d/-%d",
+                task.task_id,
+                bundle.metadata.changed_files,
+                bundle.metadata.additions,
+                bundle.metadata.deletions,
+            )
 
-    async with GitHubClient() as gh:
-        bundle = await gh.fetch_pr_bundle(ref)
-        model = req.model or s.primary_model
-        key = _cache_key(ref, bundle.metadata.head_sha, req.strategy, model)
+            if s.cache_enabled and not task.pr_url.endswith("force_refresh"):
+                key = _cache_key(ref, bundle.metadata.head_sha, model)
+                cached = get_cache().get(key)
+                if cached:
+                    logger.info("task %s cache hit", task.task_id)
+                    task.mark_done(ReviewReport(**cached))
+                    return
 
-        if s.cache_enabled and not req.force_refresh:
-            cached = get_cache().get(key)
-            if cached:
-                logger.info("cache hit: %s", key)
-                return ReviewReport(**cached)
-
-        if req.strategy == "single":
-            report = await review_pr(bundle, primary_model=model)
-        else:
+            logger.info("task %s calling LLM (triage + deep review)...", task.task_id)
             report = await review_pr_layered(bundle, ref=ref, gh=gh, primary_model=model)
+            logger.info(
+                "task %s LLM done: model=%s elapsed=%s risks=%d sugg=%d",
+                task.task_id,
+                report.model,
+                report.elapsed_ms,
+                len(report.risks),
+                len(report.suggestions),
+            )
 
-        if s.cache_enabled:
-            get_cache().set(key, report.model_dump())
-        return report
+            if s.cache_enabled:
+                get_cache().set(key, report.model_dump())
+
+            task.mark_done(report)
+    except PRNotFoundError as e:
+        task.mark_error(f"PR 不存在或非公开仓库: {e}")
+    except RateLimitedError as e:
+        task.mark_error(f"GitHub API 限流,请稍后重试: {e}")
+    except GitHubError as e:
+        task.mark_error(f"GitHub 访问失败: {e}")
+    except LLMError as e:
+        task.mark_error(f"LLM 调用失败: {e}")
+    except Exception as e:
+        logger.exception("task %s unexpected error", task.task_id)
+        task.mark_error(f"未知错误: {e}")
 
 
-def _sse(event: ReviewEvent) -> str:
-    """打包成 SSE 帧:event: <type>\\ndata: <json>\\n\\n"""
-    return f"event: {event.type}\ndata: {json.dumps(event.data, ensure_ascii=False)}\n\n"
-
-
-@router.post("/review/stream")
-async def review_stream(req: ReviewRequest) -> StreamingResponse:
-    """SSE 流式评审(始终 layered)。每阶段一个事件:
-    started → triage → file_started × N → file_done × N → done
-
-    缓存命中时:started → cached → done(瞬时返回完整报告)
-    """
-    s = get_settings()
+@router.post("/review")
+async def submit_review(req: ReviewRequest) -> TaskResponse:
+    """提交评审任务,立即返回 task_id。"""
     try:
         ref = parse_pr_url(req.url)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    async def gen() -> AsyncIterator[str]:
-        try:
-            async with GitHubClient() as gh:
-                try:
-                    bundle = await gh.fetch_pr_bundle(ref)
-                except PRNotFoundError as e:
-                    yield _sse(ReviewEvent("error", {"stage": "fetch", "message": str(e)}))
-                    return
-                except (RateLimitedError, GitHubError) as e:
-                    yield _sse(ReviewEvent("error", {"stage": "fetch", "message": str(e)}))
-                    return
+    mgr = get_task_manager()
+    task = await mgr.create(req.url, req.model or get_settings().primary_model)
 
-                model = req.model or s.primary_model
-                key = _cache_key(ref, bundle.metadata.head_sha, "layered", model)
+    # 后台启动,不 await
+    asyncio.create_task(_run_review(task, ref))
 
-                if s.cache_enabled and not req.force_refresh:
-                    cached = get_cache().get(key)
-                    if cached:
-                        yield _sse(
-                            ReviewEvent(
-                                "started",
-                                {
-                                    "pr": f"{ref.owner}/{ref.repo}#{ref.number}",
-                                    "title": bundle.metadata.title,
-                                    "files": bundle.metadata.changed_files,
-                                    "additions": bundle.metadata.additions,
-                                    "deletions": bundle.metadata.deletions,
-                                    "model": model,
-                                    "from_cache": True,
-                                },
-                            )
-                        )
-                        yield _sse(ReviewEvent("cached", cached))
-                        yield _sse(ReviewEvent("done", cached))
-                        return
+    logger.info("task %s submitted for %s/%s#%s", task.task_id, ref.owner, ref.repo, ref.number)
+    return TaskResponse(task_id=task.task_id, status="processing")
 
-                final_payload: dict | None = None
-                async for ev in review_pr_layered_stream(
-                    bundle, ref=ref, gh=gh, primary_model=model
-                ):
-                    if ev.type == "done":
-                        final_payload = ev.data
-                    yield _sse(ev)
 
-                if s.cache_enabled and final_payload:
-                    get_cache().set(key, final_payload)
-        except LLMError as e:
-            yield _sse(ReviewEvent("error", {"stage": "llm", "message": str(e)}))
-        except Exception as e:
-            logger.exception("review stream failed")
-            yield _sse(ReviewEvent("error", {"stage": "unknown", "message": str(e)}))
-
-    return StreamingResponse(
-        gen(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+@router.get("/review/{task_id}")
+async def get_review(task_id: str) -> TaskResponse:
+    """查询任务状态。完成时返回完整评审报告。"""
+    task = await get_task_manager().get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="任务不存在或已过期")
+    return TaskResponse(
+        task_id=task.task_id,
+        status=task.status,
+        result=task.result,
+        error=task.error,
     )
 
 
-@router.get("/review/cache/stats")
-async def cache_stats() -> dict:
-    return get_cache().stats()
-
-
-@router.delete("/review/cache")
-async def cache_clear() -> dict:
-    n = get_cache().clear()
-    return {"cleared": n}
+@router.get("/review/stats")
+async def review_stats() -> dict:
+    return get_task_manager().stats()
