@@ -157,10 +157,10 @@ async def _triage(
     bundle: PRBundle,
     llm: LLMClient,
     *,
-    model: str,
+    models: list[str],
 ) -> tuple[dict, TokenUsage]:
     resp = await llm.chat_json(
-        models=[model],
+        models=models,
         system=TRIAGE_SYSTEM,
         user=_triage_user_prompt(bundle),
         max_tokens=4096,
@@ -174,11 +174,11 @@ async def _deep_review_one(
     full_content: str | None,
     llm: LLMClient,
     *,
-    model: str,
+    models: list[str],
     vision_context: str | None = None,
 ) -> tuple[dict, TokenUsage]:
     resp = await llm.chat_json(
-        models=[model],
+        models=models,
         system=DEEP_REVIEW_SYSTEM,
         user=_deep_review_user_prompt(file, full_content, vision_context=vision_context),
         max_tokens=4096,
@@ -203,13 +203,14 @@ async def review_pr_layered(
     """三层评审。返回的 ReviewReport.model 字段记录主模型名。"""
     s = get_settings()
     pm = primary_model or s.primary_model
+    models = [pm] if not s.model_fallback else [pm, s.model_fallback]
     client = llm or LLMClient()
 
     t0 = time.time()
     total_usage = TokenUsage()
 
     # 第一层:粗筛
-    triage, triage_usage = await _triage(bundle, client, model=pm)
+    triage, triage_usage = await _triage(bundle, client, models=models)
     total_usage.add(triage_usage)
     summary = triage.get("summary", "")
     highlights = triage.get("highlights", []) or []
@@ -257,7 +258,7 @@ async def review_pr_layered(
                     full_content = None
             try:
                 return await _deep_review_one(
-                    f, full_content, client, model=pm, vision_context=vision_context
+                    f, full_content, client, models=models, vision_context=vision_context
                 )
             except Exception as e:
                 logger.warning("deep review failed for %s: %s", f.filename, e)
@@ -329,6 +330,7 @@ async def review_pr_layered_stream(
     """流式三层评审。逐阶段产出事件,适合 SSE。"""
     s = get_settings()
     pm = primary_model or s.primary_model
+    models = [pm] if not s.model_fallback else [pm, s.model_fallback]
     client = llm or LLMClient()
 
     t0 = time.time()
@@ -348,7 +350,7 @@ async def review_pr_layered_stream(
 
     # 第一层
     try:
-        triage, triage_usage = await _triage(bundle, client, model=pm)
+        triage, triage_usage = await _triage(bundle, client, models=models)
     except Exception as e:
         logger.exception("triage failed")
         yield ReviewEvent("error", {"stage": "triage", "message": str(e)})
@@ -413,7 +415,7 @@ async def review_pr_layered_stream(
                     full_content = None
             try:
                 res, usage = await _deep_review_one(
-                    f, full_content, client, model=pm, vision_context=vision_context
+                    f, full_content, client, models=models, vision_context=vision_context
                 )
                 await queue.put((f, res, usage))
             except Exception as e:
