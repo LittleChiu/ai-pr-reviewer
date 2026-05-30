@@ -39,7 +39,7 @@ class RateLimitedError(GitHubError):
 
 
 class GitHubClient:
-    def __init__(self, token: str | None = None, timeout: float = 30.0) -> None:
+    def __init__(self, token: str | None = None, timeout: float = 60.0) -> None:
         self._token = token or get_settings().github_token or None
         self._timeout = timeout
         self._client: httpx.AsyncClient | None = None
