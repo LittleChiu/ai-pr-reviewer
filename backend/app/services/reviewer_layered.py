@@ -70,33 +70,36 @@ DEEP_REVIEW_SYSTEM = """你是一位资深代码评审专家,正在对 Pull Requ
 3. 每条结论都要标注严重程度(severity)与置信度(confidence)。
 4. 优先在文件全文上下文里推理(看变量在别处的使用),降低误报。
 
-输出**严格 JSON**:
+**输出格式要求(必须严格遵守)**:
+- 输出纯 JSON,不要 markdown 包裹,不要前后缀文字。
+- **line_hint 必须是字符串**,例如 "42" 或 "42-45",不能是数字 42。
+- **确保 JSON 完整闭合**,所有括号配对,最后一个字段后面不要加逗号。
+- 如果该文件没有真正需要指出的问题,risks/suggestions 可以为空数组。质量比数量重要。
+
+输出示例:
 {
   "risks": [
     {
-      "file": "<文件路径>",
-      "line_hint": "行号或范围(可选)",
-      "severity": "high|medium|low",
-      "category": "bug|perf|security|style|other",
+      "file": "src/app.py",
+      "line_hint": "42",
+      "severity": "high",
+      "category": "bug",
       "title": "一句话总结",
       "detail": "解释问题与影响,给修改方向",
-      "confidence": "high|medium|low"
+      "confidence": "high"
     }
   ],
   "suggestions": [
     {
-      "file": "<文件路径>",
-      "line_hint": "行号(可选)",
+      "file": "src/app.py",
+      "line_hint": "15",
       "title": "一句话建议",
       "detail": "理由",
       "code_hint": "可选示例代码",
-      "confidence": "high|medium|low"
+      "confidence": "medium"
     }
   ]
-}
-
-如果该文件没有真正需要指出的问题,risks/suggestions 可以为空数组。质量比数量重要。
-"""
+}"""
 
 
 def _triage_user_prompt(bundle: PRBundle) -> str:
@@ -194,7 +197,7 @@ async def review_pr_layered(
     llm: LLMClient | None = None,
     gh: GitHubClient | None = None,
     primary_model: str | None = None,
-    deep_concurrency: int = 3,
+    deep_concurrency: int = 1,
     max_deep_files: int = 8,
 ) -> ReviewReport:
     """三层评审。返回的 ReviewReport.model 字段记录主模型名。"""
@@ -320,7 +323,7 @@ async def review_pr_layered_stream(
     llm: LLMClient | None = None,
     gh: GitHubClient | None = None,
     primary_model: str | None = None,
-    deep_concurrency: int = 3,
+    deep_concurrency: int = 1,
     max_deep_files: int = 8,
 ) -> AsyncIterator[ReviewEvent]:
     """流式三层评审。逐阶段产出事件,适合 SSE。"""
