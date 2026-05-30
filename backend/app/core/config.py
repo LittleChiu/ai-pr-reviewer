@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_base_url: str = "https://https://your-gateway.example.com/v1"
 
-    primary_model: str = "deepseek-v4-pro-max"
+    primary_model: str = "deepseek-v4-flash"
+    model_fallback: str = "deepseek-v4-pro-max"
     vision_model: str = "gemini-3.1-flash-lite"
 
     github_token: str = ""
