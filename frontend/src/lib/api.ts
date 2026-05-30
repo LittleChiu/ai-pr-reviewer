@@ -83,3 +83,33 @@ export async function checkHealth(signal?: AbortSignal): Promise<{
   if (!res.ok) throw new ApiCallError(res.status, res.statusText);
   return await res.json();
 }
+
+// ---------------------------------------------------------------------------
+// 仓库 PR 列表
+// ---------------------------------------------------------------------------
+
+export interface PRItem {
+  number: number;
+  title: string;
+  author: string;
+  additions: number;
+  deletions: number;
+  files: number;
+  state: string;
+  html_url: string;
+}
+
+export interface PRListResponse {
+  owner: string;
+  repo: string;
+  pulls: PRItem[];
+}
+
+export async function listRepoPRs(
+  owner: string,
+  repo: string,
+): Promise<PRListResponse> {
+  const res = await fetch(`${DEFAULT_API_BASE}/api/repo/${owner}/${repo}/pulls`);
+  if (!res.ok) throw await parseError(res);
+  return (await res.json()) as PRListResponse;
+}
