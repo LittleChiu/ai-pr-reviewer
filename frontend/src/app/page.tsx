@@ -6,6 +6,9 @@ import { ApiCallError, submitReview, getReview } from "@/lib/api";
 import { HealthBadge } from "@/components/HealthBadge";
 import { useRecentUrls } from "@/lib/useRecentUrls";
 import { reportToMarkdown } from "@/lib/markdown";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 const SEVERITY_BAR: Record<Severity, string> = {
   high: "bg-[var(--severity-high-bar)]",
@@ -100,18 +103,17 @@ export default function Home() {
           <form onSubmit={onSubmit}>
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="flex-1 relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--muted-fg)] text-sm pointer-events-none">🔗</span>
-                <input type="url" list="recent-urls" value={url} onChange={(e) => setUrl(e.target.value)}
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">🔗</span>
+                <Input type="url" list="recent-urls" value={url} onChange={(e) => setUrl(e.target.value)}
                   placeholder="https://github.com/owner/repo/pull/123" required disabled={loading}
-                  className="w-full pl-10 pr-4 py-3 rounded-[var(--radius-sm)] bg-transparent text-sm focus:outline-none disabled:opacity-50" />
+                  className="pl-10 border-0 shadow-none bg-transparent focus-visible:ring-0" />
                 {recent.length > 0 && (<datalist id="recent-urls">{recent.map((u) => (<option key={u} value={u} />))}</datalist>)}
               </div>
               {loading ? (
-                <button type="button" onClick={onCancel}
-                  className="px-5 py-3 rounded-[var(--radius-sm)] border border-[var(--border)] text-[var(--severity-high-fg)] text-sm font-medium hover:bg-[var(--severity-high-bg)] transition">取消</button>
+                <Button type="button" variant="outline" onClick={onCancel}
+                  className="text-destructive hover:bg-destructive/10">取消</Button>
               ) : (
-                <button type="submit" disabled={!url.trim()}
-                  className="px-5 py-3 rounded-[var(--radius-sm)] bg-[var(--primary)] text-[var(--primary-fg)] text-sm font-medium shadow-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition">开始评审</button>
+                <Button type="submit" disabled={!url.trim()}>开始评审</Button>
               )}
             </div>
           </form>
@@ -128,8 +130,8 @@ export default function Home() {
 
         {loading && !report && (
           <Card className="p-8 text-center">
-            <div className="flex items-center justify-center gap-3 text-sm text-[var(--muted-fg)]">
-              <div className="h-4 w-4 rounded-full border-2 border-[var(--primary)] border-t-transparent animate-spin" />
+            <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
+              <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
               评审中... 已等待 {elapsed} 秒
             </div>
           </Card>
@@ -166,12 +168,12 @@ function ReportView({ report }: { report: ReviewReport }) {
   return (
     <div className="space-y-6">
       {report.summary && (
-        <Section title="📋 PR 总览"><Card className="p-5"><p className="text-sm leading-relaxed whitespace-pre-wrap">{report.summary}</p></Card></Section>
+        <Section title="📋 PR 总览"><Card><CardContent className="pt-0 first:pt-6"><p className="text-sm leading-relaxed whitespace-pre-wrap">{report.summary}</p></CardContent></Card></Section>
       )}
       {report.highlights && report.highlights.length > 0 && (
-        <Section title="✨ 亮点"><Card className="p-5">
+        <Section title="✨ 亮点"><Card><CardContent className="pt-0 first:pt-6">
           <ul className="space-y-2 text-sm">{report.highlights.map((h, i) => <li key={i} className="flex gap-2.5"><span className="text-emerald-500 mt-0.5">▸</span><span>{h}</span></li>)}</ul>
-        </Card></Section>
+        </CardContent></Card></Section>
       )}
       {allRisks.length > 0 && (
         <Section title={`⚠️ 风险 (${allRisks.length})`}><div className="space-y-3">{allRisks.map((r, i) => <RiskCard key={i} r={r} />)}</div></Section>
@@ -185,7 +187,7 @@ function ReportView({ report }: { report: ReviewReport }) {
 
 function RiskCard({ r }: { r: RiskItem }) {
   return (
-    <Card className="overflow-hidden"><div className="flex"><div className={`w-1 shrink-0 ${SEVERITY_BAR[r.severity]}`} /><div className="flex-1 p-4 min-w-0">
+    <Card className="overflow-hidden p-0"><div className="flex"><div className={`w-1 shrink-0 ${SEVERITY_BAR[r.severity]}`} /><div className="flex-1 p-4 min-w-0">
       <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap text-xs">
           <span className={`px-2 py-0.5 rounded-md font-mono uppercase font-medium ${SEVERITY_TINT[r.severity]}`}>{r.severity}</span>
@@ -221,10 +223,6 @@ function ConfidencePill({ c }: { c: Confidence }) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (<section><h2 className="text-sm font-semibold mb-3 px-1">{title}</h2>{children}</section>);
-}
-
-function Card({ className = "", children }: { className?: string; children: React.ReactNode }) {
-  return (<div className={`rounded-[var(--radius)] bg-[var(--card)] backdrop-blur border border-[var(--border)] shadow-[var(--shadow-sm)] ${className}`}>{children}</div>);
 }
 
 function EmptyState() {
