@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 Severity = Literal["high", "medium", "low"]
 Confidence = Literal["high", "medium", "low"]
@@ -22,6 +22,13 @@ class RiskItem(BaseModel):
     detail: str
     confidence: Confidence = "medium"
 
+    @field_validator("line_hint", mode="before")
+    @classmethod
+    def coerce_line_hint(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        return str(v)
+
 
 class Suggestion(BaseModel):
     file: str
@@ -30,6 +37,13 @@ class Suggestion(BaseModel):
     detail: str
     code_hint: str | None = None
     confidence: Confidence = "medium"
+
+    @field_validator("line_hint", mode="before")
+    @classmethod
+    def coerce_line_hint(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        return str(v)
 
 
 class TokenUsage(BaseModel):
