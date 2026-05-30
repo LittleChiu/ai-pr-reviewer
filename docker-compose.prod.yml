@@ -35,6 +35,9 @@ services:
       CACHE_DB_PATH: /data/cache.db
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000"]}'
       CORS_ORIGIN_REGEX: ${CORS_ORIGIN_REGEX:-}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1}
     volumes:
       - cache:/data
     ports:
