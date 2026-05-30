@@ -37,13 +37,13 @@
   --shadow-md: 0 4px 16px -4px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
   --shadow-lg: 0 12px 40px -12px rgba(0, 0, 0, 0.16);
 
-  /* 暖色调 112deg 多色渐变,参考现代 AI 工具的"米白多彩"调性 */
+  /* 对齐 new-api 的 112deg 多色渐变 */
   --grad-bg: linear-gradient(
     112deg,
-    rgba(235, 247, 255, 0.92) 0%,
-    rgba(249, 231, 255, 0.82) 38%,
-    rgba(255, 241, 197, 0.78) 74%,
-    rgba(211, 250, 180, 0.62) 100%
+    #ebf7ffeb 0%,
+    #f9e7ffd1 38%,
+    #fff1c5c7 74%,
+    #d3fab49e 100%
   );
 }
 
