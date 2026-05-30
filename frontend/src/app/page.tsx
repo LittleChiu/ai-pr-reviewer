@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { Confidence, ReviewReport, RiskItem, Severity, Suggestion } from "@/lib/types";
-import { ApiCallError, submitReview, getReview } from "@/lib/api";
+import { ApiCallError, submitReview, getReview, listRepoPRs, type PRItem } from "@/lib/api";
 import { HealthBadge } from "@/components/HealthBadge";
 import { useRecentUrls } from "@/lib/useRecentUrls";
 import { reportToMarkdown } from "@/lib/markdown";
@@ -36,11 +36,30 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const { recent, push: pushRecent } = useRecentUrls();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const [repoPRs, setRepoPRs] = useState<PRItem[] | null>(null);
+  const [repoOwner, setRepoOwner] = useState("");
+  const [repoName, setRepoName] = useState("");
+
+  // 检测 owner/repo 格式,自动拉 PR 列表
+  const onUrlChange = (val: string) => {
+    setUrl(val);
+    setRepoPRs(null);
+    const m = val.trim().match(/^([\w.-]+)\/([\w.-]+)$/);
+    if (m && !val.includes("pull/")) {
+      const owner = m[1];
+      const repo = m[2];
+      setRepoOwner(owner);
+      setRepoName(repo);
+      listRepoPRs(owner, repo)
+        .then((r) => setRepoPRs(r.pulls))
+        .catch(() => setRepoPRs(null));
+    }
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url.trim() || loading) return;
-    const trimmed = url.trim();
+    const trimmed = (e.currentTarget as HTMLFormElement).querySelector<HTMLInputElement>("input")?.value?.trim() || url.trim();
     setLoading(true);
     setError(null);
     setReport(null);
@@ -100,11 +119,11 @@ export default function Home() {
         </header>
 
         <Card className="p-2 mb-8">
-          <form onSubmit={onSubmit}>
+          <form ref={formRef} onSubmit={onSubmit}>
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="flex-1 relative">
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">🔗</span>
-                <Input type="url" list="recent-urls" value={url} onChange={(e) => setUrl(e.target.value)}
+                <Input type="url" list="recent-urls" value={url} onChange={(e) => onUrlChange(e.target.value)}
                   placeholder="https://github.com/owner/repo/pull/123" required disabled={loading}
                   className="pl-10 border-0 shadow-none bg-transparent focus-visible:ring-0" />
                 {recent.length > 0 && (<datalist id="recent-urls">{recent.map((u) => (<option key={u} value={u} />))}</datalist>)}
@@ -118,6 +137,39 @@ export default function Home() {
             </div>
           </form>
         </Card>
+
+        {repoPRs && repoPRs.length > 0 && (
+          <div className="mb-8">
+            <h3 className="text-xs font-medium text-muted-foreground mb-3">
+              {repoOwner}/{repoName} · {repoPRs.length} 个 open PR
+            </h3>
+            <div className="space-y-1.5 max-h-80 overflow-y-auto">
+              {repoPRs.map((pr) => (
+                <button
+                  key={pr.number}
+                  type="button"
+                  onClick={() => {
+                    const prUrl = `https://github.com/${repoOwner}/${repoName}/pull/${pr.number}`;
+                    setUrl(prUrl);
+                    setRepoPRs(null);
+                    setTimeout(() => formRef.current?.requestSubmit(), 50);
+                  }}
+                  className="w-full text-left px-4 py-2.5 rounded-lg border border-border hover:bg-muted/50 transition text-sm flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className="font-mono text-muted-foreground mr-2">#{pr.number}</span>
+                    <span className="truncate">{pr.title}</span>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-3 text-xs text-muted-foreground">
+                    <span>@{pr.author}</span>
+                    <span className="text-emerald-600">+{pr.additions}</span>
+                    <span className="text-red-400">-{pr.deletions}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="mb-8 p-4 rounded-[var(--radius)] bg-[var(--severity-high-bg)] text-[var(--severity-high-fg)] text-sm flex items-start gap-3 whitespace-pre-wrap">
