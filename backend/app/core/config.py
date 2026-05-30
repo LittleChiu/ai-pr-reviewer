@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     )
 
     openai_api_key: str = ""
-    openai_base_url: str = "https://https://your-gateway.example.com/v1"
+    openai_base_url: str = "https://your-gateway.example.com/v1"
 
     primary_model: str = "deepseek-v4-flash"
     model_fallback: str = "deepseek-v4-pro-max"

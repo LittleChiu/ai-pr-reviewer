@@ -48,7 +48,7 @@
 | 视觉补充（PR 描述含截图/架构图时）| `gemini-3.1-flash-lite` | 多模态 |
 | 兜底备份 | `claude-sonnet-4-6` | 主路挂了切兜底 |
 
-**调用方式**：OpenAI 兼容 SDK，`base_url=https://https://your-gateway.example.com/v1`，统一 `OPENAI_API_KEY`。
+**调用方式**：OpenAI 兼容 SDK，`base_url=https://your-gateway.example.com/v1`，统一 `OPENAI_API_KEY`。
 
 ### 2.2 技术栈
 
