@@ -59,7 +59,7 @@ class CountingLLM:
             total_tokens=self._usage.total_tokens,
             llm_calls=1,
         )
-        return LLMResponse(content=self._payloads.pop(0), model=kw["models"][0], usage=u)
+        return LLMResponse(content=self._payloads.pop(0), model=kw["model"], usage=u)
 
 
 @pytest.mark.asyncio

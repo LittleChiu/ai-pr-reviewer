@@ -49,7 +49,7 @@ class FakeLLM:
 
     async def chat_json(self, **kw: Any) -> LLMResponse:
         self.calls.append(kw)
-        return LLMResponse(content=self._payloads.pop(0), model=kw["models"][0])
+        return LLMResponse(content=self._payloads.pop(0), model=kw["model"])
 
 
 @pytest.mark.asyncio

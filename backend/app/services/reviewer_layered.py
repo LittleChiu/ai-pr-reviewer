@@ -1,20 +1,17 @@
 """三层 prompt 评审策略。
 
-第一层 — 粗筛 (primary_model):
+第一层 — 粗筛:
   输入: PR metadata + 文件清单(不带 diff)
   输出: 整体 summary + highlights + 每个文件的 attention 等级(deep/normal/skip)
 
-第二层 — 深审 (primary_model,逐文件并发):
-  输入: 单文件的完整文件内容(若可拉到) + 文件级 patch + 可选视觉上下文
+第二层 — 深审 (逐文件并发):
+  输入: 单文件的完整文件内容(若可拉到) + 文件级 patch
   输出: 这个文件的 risks + suggestions
 
 第三层 — 聚合:
   纯代码合并:汇总各文件的 risks/suggestions,按严重程度排序
 
-视觉增强:
-  如果 PR 描述包含图片且 VISION_ENABLED=true,triage 后先调 vision_model
-  分析图片,把结果注入到每个 deep review 的 prompt 里作为额外上下文。
-  视觉分析失败不阻塞主路。
+两层均使用主模型。
 
 提供两个版本:
 - review_pr_layered: 一次性返回 ReviewReport(同步等所有结果)
@@ -34,7 +31,6 @@ from typing import Any
 from app.core.config import get_settings
 from app.services.github_client import GitHubClient
 from app.services.github_schema import PRBundle, PRFile
-from app.services.image_utils import extract_image_urls
 from app.services.llm_client import LLMClient, TokenUsage, extract_json
 from app.services.pr_url import PRRef
 from app.services.review_schema import ReviewReport, RiskItem, Suggestion
@@ -70,36 +66,33 @@ DEEP_REVIEW_SYSTEM = """你是一位资深代码评审专家,正在对 Pull Requ
 3. 每条结论都要标注严重程度(severity)与置信度(confidence)。
 4. 优先在文件全文上下文里推理(看变量在别处的使用),降低误报。
 
-**输出格式要求(必须严格遵守)**:
-- 输出纯 JSON,不要 markdown 包裹,不要前后缀文字。
-- **line_hint 必须是字符串**,例如 "42" 或 "42-45",不能是数字 42。
-- **确保 JSON 完整闭合**,所有括号配对,最后一个字段后面不要加逗号。
-- 如果该文件没有真正需要指出的问题,risks/suggestions 可以为空数组。质量比数量重要。
-
-输出示例:
+输出**严格 JSON**:
 {
   "risks": [
     {
-      "file": "src/app.py",
-      "line_hint": "42",
-      "severity": "high",
-      "category": "bug",
+      "file": "<文件路径>",
+      "line_hint": "行号或范围(可选)",
+      "severity": "high|medium|low",
+      "category": "bug|perf|security|style|other",
       "title": "一句话总结",
       "detail": "解释问题与影响,给修改方向",
-      "confidence": "high"
+      "confidence": "high|medium|low"
     }
   ],
   "suggestions": [
     {
-      "file": "src/app.py",
-      "line_hint": "15",
+      "file": "<文件路径>",
+      "line_hint": "行号(可选)",
       "title": "一句话建议",
       "detail": "理由",
       "code_hint": "可选示例代码",
-      "confidence": "medium"
+      "confidence": "high|medium|low"
     }
   ]
-}"""
+}
+
+如果该文件没有真正需要指出的问题,risks/suggestions 可以为空数组。质量比数量重要。
+"""
 
 
 def _triage_user_prompt(bundle: PRBundle) -> str:
@@ -127,18 +120,11 @@ def _deep_review_user_prompt(
     file: PRFile,
     full_file_content: str | None,
     char_limit: int = 30000,
-    vision_context: str | None = None,
 ) -> str:
     parts = [
         f"# 文件: {file.filename}",
         f"状态: {file.status}, +{file.additions}/-{file.deletions}",
     ]
-    if vision_context:
-        parts.append(
-            "\n## PR 描述中的图片分析\n"
-            f"以下是对 PR 描述中截图/图片的视觉分析结果,"
-            f"请在评审时结合图片信息理解代码变更的上下文:\n{vision_context}"
-        )
     if file.patch:
         patch = file.patch
         if len(patch) > char_limit:
@@ -157,13 +143,13 @@ async def _triage(
     bundle: PRBundle,
     llm: LLMClient,
     *,
-    models: list[str],
+    model: str,
 ) -> tuple[dict, TokenUsage]:
     resp = await llm.chat_json(
-        models=models,
+        model=model,
         system=TRIAGE_SYSTEM,
         user=_triage_user_prompt(bundle),
-        max_tokens=4096,
+        max_tokens=2048,
         temperature=0.2,
     )
     return extract_json(resp.content), resp.usage
@@ -174,14 +160,13 @@ async def _deep_review_one(
     full_content: str | None,
     llm: LLMClient,
     *,
-    models: list[str],
-    vision_context: str | None = None,
+    model: str,
 ) -> tuple[dict, TokenUsage]:
     resp = await llm.chat_json(
-        models=models,
+        model=model,
         system=DEEP_REVIEW_SYSTEM,
-        user=_deep_review_user_prompt(file, full_content, vision_context=vision_context),
-        max_tokens=4096,
+        user=_deep_review_user_prompt(file, full_content),
+        max_tokens=2048,
         temperature=0.2,
     )
     return extract_json(resp.content), resp.usage
@@ -197,20 +182,19 @@ async def review_pr_layered(
     llm: LLMClient | None = None,
     gh: GitHubClient | None = None,
     primary_model: str | None = None,
-    deep_concurrency: int = 1,
+    deep_concurrency: int = 3,
     max_deep_files: int = 8,
 ) -> ReviewReport:
     """三层评审。返回的 ReviewReport.model 字段记录主模型名。"""
     s = get_settings()
     pm = primary_model or s.primary_model
-    models = [pm] if not s.model_fallback else [pm, s.model_fallback]
     client = llm or LLMClient()
 
     t0 = time.time()
     total_usage = TokenUsage()
 
     # 第一层:粗筛
-    triage, triage_usage = await _triage(bundle, client, models=models)
+    triage, triage_usage = await _triage(bundle, client, model=pm)
     total_usage.add(triage_usage)
     summary = triage.get("summary", "")
     highlights = triage.get("highlights", []) or []
@@ -228,21 +212,6 @@ async def review_pr_layered(
         len(bundle.files),
     )
 
-    # 可选:视觉分析(PR 描述含图片时)
-    vision_context: str | None = None
-    if s.vision_enabled and bundle.metadata.body:
-        image_urls = extract_image_urls(bundle.metadata.body)
-        if image_urls:
-            vr = await client.analyze_images(model=s.vision_model, image_urls=image_urls)
-            if vr is not None:
-                vision_context = vr.content
-                total_usage.add(vr.usage)
-                highlights.insert(
-                    0,
-                    f"[图片分析] PR 描述包含 {len(image_urls)} 张图片,"
-                    f"已用 vision 模型({vr.model})分析并注入到评审上下文",
-                )
-
     # 第二层:并发深审
     sem = asyncio.Semaphore(deep_concurrency)
 
@@ -257,9 +226,7 @@ async def review_pr_layered(
                 except Exception:
                     full_content = None
             try:
-                return await _deep_review_one(
-                    f, full_content, client, models=models, vision_context=vision_context
-                )
+                return await _deep_review_one(f, full_content, client, model=pm)
             except Exception as e:
                 logger.warning("deep review failed for %s: %s", f.filename, e)
                 return ({"risks": [], "suggestions": []}, TokenUsage())
@@ -324,13 +291,12 @@ async def review_pr_layered_stream(
     llm: LLMClient | None = None,
     gh: GitHubClient | None = None,
     primary_model: str | None = None,
-    deep_concurrency: int = 1,
+    deep_concurrency: int = 3,
     max_deep_files: int = 8,
 ) -> AsyncIterator[ReviewEvent]:
     """流式三层评审。逐阶段产出事件,适合 SSE。"""
     s = get_settings()
     pm = primary_model or s.primary_model
-    models = [pm] if not s.model_fallback else [pm, s.model_fallback]
     client = llm or LLMClient()
 
     t0 = time.time()
@@ -350,7 +316,7 @@ async def review_pr_layered_stream(
 
     # 第一层
     try:
-        triage, triage_usage = await _triage(bundle, client, models=models)
+        triage, triage_usage = await _triage(bundle, client, model=pm)
     except Exception as e:
         logger.exception("triage failed")
         yield ReviewEvent("error", {"stage": "triage", "message": str(e)})
@@ -367,22 +333,6 @@ async def review_pr_layered_stream(
     deep_files = [f for f in bundle.files if file_attentions.get(f.filename, "normal") == "deep"]
     deep_files = sorted(deep_files, key=lambda f: -f.changes)[:max_deep_files]
 
-    # 可选:视觉分析(triage 之后、yield triage 事件之前,只发一次 triage)
-    vision_context: str | None = None
-    vision_images = 0
-    if s.vision_enabled and bundle.metadata.body:
-        image_urls = extract_image_urls(bundle.metadata.body)
-        if image_urls:
-            vr = await client.analyze_images(model=s.vision_model, image_urls=image_urls)
-            if vr is not None:
-                vision_context = vr.content
-                vision_images = len(image_urls)
-                total_usage.add(vr.usage)
-                highlights.append(
-                    f"[图片分析] PR 描述包含 {vision_images} 张图片,"
-                    f"已用 vision 模型({vr.model})分析并注入到评审上下文",
-                )
-
     yield ReviewEvent(
         "triage",
         {
@@ -395,7 +345,6 @@ async def review_pr_layered_stream(
                 if file_attentions.get(f.filename, "normal") != "deep"
             ],
             "token_usage": triage_usage.__dict__,
-            "vision_analyzed": vision_images,
         },
     )
 
@@ -414,9 +363,7 @@ async def review_pr_layered_stream(
                 except Exception:
                     full_content = None
             try:
-                res, usage = await _deep_review_one(
-                    f, full_content, client, models=models, vision_context=vision_context
-                )
+                res, usage = await _deep_review_one(f, full_content, client, model=pm)
                 await queue.put((f, res, usage))
             except Exception as e:
                 logger.warning("deep review failed for %s: %s", f.filename, e)

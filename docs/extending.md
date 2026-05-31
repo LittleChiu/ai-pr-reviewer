@@ -16,19 +16,18 @@
 ## 加入新的 LLM 模型
 
 ### 场景
-LLM 网关后续上线了新的模型,或换用其它 OpenAI 兼容服务。
+yorhamc 网关后续上线了新的模型,或换用其它 OpenAI 兼容服务。
 
 ### 步骤
-1. 在 `.env` / `.env.example` 加新档位变量,例如 `SECURITY_MODEL=...`
+1. 在 `.env` / `.env.example` 加新变量,例如 `SECONDARY_MODEL=...`
 2. 在 `backend/app/core/config.py` 的 `Settings` 加字段
-3. 在调用方(`reviewer.py` / `reviewer_layered.py`)的 `chat_json(models=[...])` 调用里加这个模型作为新档位或加进 fallback 链
+3. 在调用方使用该模型
 
 ### 切换主模型
 完全不改代码,只改 `.env`:
 
 ```bash
 PRIMARY_MODEL=claude-sonnet-4-6  # 主路换 Claude
-FALLBACK_MODEL=deepseek-v4-pro-max
 ```
 
 ---
@@ -92,9 +91,8 @@ PR 描述里贴了架构图截图,希望模型理解后再做评审。
 3. 在 `_triage` 阶段,如果 `body_images` 不为空,触发**额外一次 vision 模型调用**:
    ```python
    resp = await llm.chat_json(
-       models=[vision_model, fallback_model],
+       model=vision_model,
        system="你是图像理解专家。识别这些图片是 PR 描述里的什么,...",
-       user_with_images=[{"text": "..."}, {"image_url": img_url}],
        ...
    )
    ```
@@ -102,7 +100,7 @@ PR 描述里贴了架构图截图,希望模型理解后再做评审。
 5. 加 feature flag `VISION_ENABLED=true`,默认关闭
 
 ### 注意
-- LLM 网关需要先把视觉模型的价格配置上(目前 `gemini-3.1-flash-image` 等被网关锁住)
+- yorhamc 网关需要先把视觉模型的价格配置上(目前 `gemini-3.1-flash-image` 等被网关锁住)
 - 图片输入消耗 token 多(~1000/图),建议加每个 PR 最多分析 2 张图的限制
 
 ---

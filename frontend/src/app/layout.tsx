@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AI PR Review — 智能 PR 评审助手",
   description:
-    "粘贴 GitHub PR 链接,基于 LLM 出带置信度的评审报告:总结、风险、建议。",
+    "粘贴 GitHub PR 链接，基于 LLM 出带置信度的评审报告：总结、风险、建议。",
 };
 
 export default function RootLayout({

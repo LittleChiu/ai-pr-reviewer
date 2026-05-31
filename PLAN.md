@@ -41,14 +41,12 @@
 
 ### 2.1 模型策略（已锁定）
 
-| 任务 | 模型 | 理由 |
+| 模型 | 默认 | 用途 |
 |---|---|---|
-| 主评审（推理型）| `deepseek-v4-pro-max` | 长上下文、强推理、价格合理 |
-| 快速分类（如"该文件是否值得深审"）| `deepseek-v4-flash` | 便宜快，做粗筛 |
-| 视觉补充（PR 描述含截图/架构图时）| `gemini-3.1-flash-lite` | 多模态 |
-| 兜底备份 | `claude-sonnet-4-6` | 主路挂了切兜底 |
+| PRIMARY | `deepseek-v4-pro-max` | 所有文本评审任务：粗筛 + 深审 |
+| VISION | `gemini-3.1-flash-lite` | 多模态（PR 描述含截图/架构图时）|
 
-**调用方式**：OpenAI 兼容 SDK，`base_url=https://your-gateway.example.com/v1`，统一 `OPENAI_API_KEY`。
+**调用方式**：OpenAI 兼容 SDK，`base_url=https://yorhamc.com/v1`，统一 `OPENAI_API_KEY`。
 
 ### 2.2 技术栈
 
@@ -56,9 +54,9 @@
 |---|---|---|
 | 后端 | **FastAPI** + uv 管包 | Python 生态做 LLM 接入最顺，PyGithub 直接用 |
 | 前端 | **Next.js 15 (App Router)** + Tailwind + shadcn/ui | 一键 Vercel 部署，UI 组件成熟 |
-| 数据 | **SQLite + sqlite3** | 缓存 PR 分析结果，轻量、零运维 |
+| 数据 | **SQLite + SQLModel** | 缓存 PR 分析结果，轻量、零运维 |
 | 任务 | **同步调用 + 流式输出（SSE）** | 不引 Celery/Redis，KISS |
-| 部署 | 后端：自建 + Cloudflare Tunnel；前端：Vercel | 后端可缓存/前端 CDN 加速 |
+| 部署 | 后端：本地 + Cloudflare Tunnel；前端：Vercel | 后端有 GPU/可缓存，前端要 CDN |
 | GitHub 接入 | **httpx + GitHub REST API**（不用 PyGithub）| PyGithub 同步阻塞，httpx 原生异步、可流式 |
 
 ### 2.3 关键设计决策
@@ -101,7 +99,7 @@
                 ▼                  ▼                       ▼
         ┌──────────────┐  ┌────────────────┐    ┌────────────────┐
         │ GitHub API   │  │ LLM Gateway    │    │ SQLite Cache   │
-        │ (PR/files)   │  │ (your-gateway.example.com)  │    │ (results)      │
+        │ (PR/files)   │  │ (yorhamc.com)  │    │ (results)      │
         └──────────────┘  └────────────────┘    └────────────────┘
 ```
 
@@ -122,7 +120,7 @@
 
 | 风险 | 概率 | 缓解 |
 |---|---|---|
-| LLM 网关挂（已发生过 upstream_error）| 中 | 预设 fallback 链：deepseek→claude→gemini |
+| LLM 网关挂（已发生过 upstream_error）| 中 | 用户可自行更换 PRIMARY_MODEL 为其他可用模型 |
 | GitHub API rate limit | 低 | 用 gh auth 的 token，5000/h 够用；缓存命中减少调用 |
 | 大 PR token 爆炸 | 中 | 文件级筛选 + 截断 + 摘要降级 |
 | 前端 Vercel 国内访问慢 | 低 | 备用：把前端也部署到本地 + Cloudflare Tunnel |

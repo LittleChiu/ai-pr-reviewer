@@ -19,7 +19,6 @@
 - ✨ **亮点** — 值得肯定的设计点
 - ⚠️ **风险** — 可能的 bug / 性能 / 安全隐患（带 severity + confidence）
 - 💡 **建议** — 指向具体行的可立即采纳的修改建议
-- 🖼️ **视觉增强** — PR 描述含截图/架构图时，自动用视觉模型分析并注入评审上下文
 
 ## 🎬 Demo
 
@@ -47,7 +46,7 @@
 |---|---|---|
 | 前端 | Next.js 16 (App Router) + Tailwind 4 + TypeScript | 一键 Vercel,SSE 流式渲染体验 |
 | 后端 | FastAPI + uv + httpx | Python LLM 生态成熟,异步并发 |
-| LLM | DeepSeek V4 (主) + Claude 4.6 (兜底) + Gemini 3.1 (视觉) | 通过 OpenAI 兼容协议接 LLM 网关 |
+| LLM | DeepSeek V4 (主) + Claude 4.6 (兜底) + Gemini 3.1 (视觉) | 通过 OpenAI 兼容协议接 yorhamc 中转 |
 | 部署 | 前端 Vercel · 后端自建 + Cloudflare Tunnel | Vercel 60s 超时跑不完 LLM 评审 |
 
 完整方案见 [PLAN.md](./PLAN.md)，架构图见 [docs/architecture.md](./docs/architecture.md)。后端启动后访问 `http://localhost:8000/docs` 可看自动生成的 OpenAPI 文档。
@@ -96,14 +95,16 @@ pnpm dev
 
 ## 🧠 模型选择思路
 
-双模型策略，OpenAI 兼容协议下任意切换（详见 [docs/model-strategy.md](./docs/model-strategy.md)）：
+四档分工，OpenAI 兼容协议下任意切换（详见 [docs/model-strategy.md](./docs/model-strategy.md)）：
 
 | 档位 | 默认模型 | 用途 |
 |---|---|---|
-| **PRIMARY** | `deepseek-v4-pro-max` | 文本评审(粗筛 + 深审都用它) |
-| **VISION** | `gemini-3.1-flash-lite` | PR 描述含截图时使用(预留) |
+| **PRIMARY** | `deepseek-v4-pro-max` | 文件级深度评审 |
+| **FAST** | `deepseek-v4-flash` | 整体粗筛、attention 分类 |
+| **VISION** | `gemini-3.1-flash-lite` | PR 描述含截图时(预留) |
+| **FALLBACK** | `claude-sonnet-4-6` | 主路失败时兜底 |
 
-每个模型内部支持同模型重试(默认 3 次)，应对网关瞬时抖动。
+模型 fallback 链由调用方传入：粗筛走 `fast → fallback`，深审走 `primary → fallback`。任意主路抖动都不会中断评审。
 
 ## 📡 上下文获取方式
 
@@ -124,7 +125,7 @@ ai-pr-reviewer/
 │   │   ├── api/            # /api/health, /api/pr/*, /api/review*
 │   │   ├── services/       # github_client, llm_client, reviewer*
 │   │   └── core/           # config.py, errors.py(统一错误处理)
-│   ├── tests/              # 44 个用例,含 respx mock、流式编排、视觉分析
+│   ├── tests/              # 38 个用例,含 respx mock 与流式编排
 │   └── Dockerfile          # python:3.11-slim + uv
 ├── frontend/               # Next.js 16 前端
 │   └── src/
@@ -155,10 +156,6 @@ ai-pr-reviewer/
 - 加入视觉理解能力(分析 PR 描述里的截图)
 - 加入团队规范的个性化评审
 - 加入 GitHub App 集成(自动监听 PR 事件,以 review comment 回写)
-
-## 🔧 排障
-
-常见部署和运行问题见 [docs/troubleshooting.md](./docs/troubleshooting.md)。
 
 ## 📜 License
 

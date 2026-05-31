@@ -20,7 +20,7 @@
                                  │ HTTPS(Cloudflare Tunnel)
                                  ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│           FastAPI · 自建服务器                                     │
+│           FastAPI · 自建 GPU 服务器                               │
 │                                                                  │
 │  api/review.py                                                   │
 │   ├─ POST /api/review        非流式(layered 或 single)           │
@@ -31,7 +31,7 @@
 │   ├─ github_client.py        异步 httpx + raw.githubusercontent  │
 │   ├─ reviewer.py             single 策略                          │
 │   ├─ reviewer_layered.py     layered 策略 + 流式                  │
-│   ├─ llm_client.py           OpenAI 兼容 + 模型调用 + 同模型重试     │
+│   ├─ llm_client.py           OpenAI 兼容 + fallback 链            │
 │   ├─ github_schema.py        GitHub 数据 pydantic 模型            │
 │   └─ review_schema.py        ReviewReport pydantic 模型           │
 │                                                                  │
@@ -41,10 +41,10 @@
            ▼                                     ▼
 ┌──────────────────────┐              ┌──────────────────────────┐
 │ GitHub REST API      │              │ LLM Gateway              │
-│ - pulls/N            │              │ https://your-gateway.example.com/v1           │
+│ - pulls/N            │              │ yorhamc.com/v1           │
 │ - pulls/N/files      │              │ (OpenAI 兼容协议)        │
 │ - 文件全文           │              │                          │
-│ raw.githubusercontent│              │ deepseek / gemini / ...    │
+│ raw.githubusercontent│              │ deepseek / claude / gemini│
 └──────────────────────┘              └──────────────────────────┘
 ```
 
@@ -58,7 +58,7 @@
   │                    │◀──────────── metadata + files│
   │◀ event: started ───│                │            │
   │                    │                │            │
-  │                    ├ triage(primary)─▶│            │
+  │                    ├ triage(fast)──▶│            │
   │                    │◀──────────── summary+attention
   │◀ event: triage ────│                │            │
   │                    │                │            │
@@ -92,7 +92,7 @@
 
 ### 决策 3:为什么后端不放 Vercel?
 
-Vercel Functions 60s 超时,layered 评审一轮 30-90s,巨型 PR 更长。我们用自建服务器 + Cloudflare Tunnel 暴露公网,不受云厂商运行时限制。
+Vercel Functions 60s 超时,layered 评审一轮 30-90s,巨型 PR 更长。我们用自建服务器 + Cloudflare Tunnel 暴露公网。GPU 资源还能为未来本地推理预留可能性。
 
 ### 决策 4:为什么 GitHub 数据走两套接口?
 
@@ -107,7 +107,7 @@ Vercel Functions 60s 超时,layered 评审一轮 30-90s,巨型 PR 更长。我�
 
 ### 决策 6:为什么用 OpenAI SDK 而不是直接 httpx?
 
-- LLM 网关 OpenAI 兼容,SDK 已经实现重试、错误码、流式
+- yorhamc 网关 OpenAI 兼容,SDK 已经实现重试、错误码、流式
 - 切换主流模型(deepseek/claude/openai 等)只改 \`base_url + model\`,业务代码零改动
 - SDK 内置 retry-after 处理
 

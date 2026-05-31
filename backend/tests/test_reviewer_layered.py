@@ -60,7 +60,7 @@ class FakeLLM:
         self.calls.append(kw)
         if not self._payloads:
             raise RuntimeError("FakeLLM: out of payloads")
-        return LLMResponse(content=self._payloads.pop(0), model=kw["models"][0])
+        return LLMResponse(content=self._payloads.pop(0), model=kw["model"])
 
 
 @pytest.mark.asyncio
@@ -125,11 +125,11 @@ async def test_layered_review_triage_then_deep() -> None:
 
     # 1 次粗筛 + 2 次深审(b.py 被 skip)
     assert len(fake.calls) == 3
-    # 粗筛和深审都用 primary_model
-    assert fake.calls[0]["models"][0] == "P"
-    # 深审同样使用 primary_model
-    assert fake.calls[1]["models"][0] == "P"
-    assert fake.calls[2]["models"][0] == "P"
+    # 粗筛使用 primary_model
+    assert fake.calls[0]["model"] == "P"
+    # 深审使用 primary_model
+    assert fake.calls[1]["model"] == "P"
+    assert fake.calls[2]["model"] == "P"
 
     assert report.summary.startswith("增加")
     assert len(report.risks) == 2
@@ -184,7 +184,7 @@ async def test_layered_review_handles_deep_failure() -> None:
                 raise RuntimeError("upstream timeout")
             return LLMResponse(
                 content=self._payloads.pop(0) if self._payloads else "{}",
-                model=kw["models"][0],
+                model=kw["model"],
             )
 
     deep_b = json.dumps({"risks": [], "suggestions": []})
