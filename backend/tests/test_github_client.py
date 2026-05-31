@@ -113,4 +113,16 @@ async def test_fetch_pr_bundle(ref: PRRef) -> None:
     respx.get("https://api.github.com/repos/LittleChiu/ai-pr-reviewer/pulls/42").mock(
         side_effect=[
             Response(200, json=_PR_JSON),
-            Response(200, text="diff
+            Response(200, text="diff --git a/README.md b/README.md\n@@ -1 +1 @@\n-x\n+y\n"),
+        ]
+    )
+    respx.get("https://api.github.com/repos/LittleChiu/ai-pr-reviewer/pulls/42/files").mock(
+        return_value=Response(200, json=_FILES_JSON)
+    )
+
+    async with GitHubClient() as gh:
+        bundle = await gh.fetch_pr_bundle(ref)
+
+    assert bundle.metadata.number == 42
+    assert len(bundle.files) == 1
+    assert bundle.raw_diff.startswith("diff --git")
