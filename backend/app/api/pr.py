@@ -5,12 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from app.services.github_client import (
-    GitHubClient,
-    GitHubError,
-    PRNotFoundError,
-    RateLimitedError,
-)
+from app.services.github_client import GitHubClient
 from app.services.github_schema import PRBundle
 from app.services.pr_url import parse_pr_url
 
@@ -29,19 +24,13 @@ async def fetch_pr(req: FetchPRRequest) -> PRBundle:
         ref = parse_pr_url(req.url)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    try:
-        async with GitHubClient() as gh:
-            return await gh.fetch_pr_bundle(
-                ref,
-                include_diff=req.include_diff,
-                max_files=req.max_files,
-            )
-    except PRNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except RateLimitedError as e:
-        raise HTTPException(status_code=429, detail=str(e)) from e
-    except GitHubError as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    async with GitHubClient() as gh:
+        return await gh.fetch_pr_bundle(
+            ref,
+            include_diff=req.include_diff,
+            max_files=req.max_files,
+        )
 
 
 @router.get("/pr/parse")

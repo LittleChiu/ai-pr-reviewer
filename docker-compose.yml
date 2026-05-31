@@ -33,4 +33,12 @@ services:
     image: ai-pr-reviewer-frontend:latest
     environment:
       BACKEND_URL: http://backend:8000
-    port
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  cache:

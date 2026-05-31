@@ -24,6 +24,18 @@ def _raw_host() -> str:
     return get_settings().github_raw_base
 
 
+def _pull_url(ref: PRRef) -> str:
+    return f"{_github_api()}/repos/{ref.slug}/pulls/{ref.number}"
+
+
+def _pull_files_url(ref: PRRef, *, per_page: int, page: int) -> str:
+    return f"{_pull_url(ref)}/files?per_page={per_page}&page={page}"
+
+
+def _raw_file_url(ref: PRRef, path: str, sha: str) -> str:
+    return f"{_raw_host()}/{ref.slug}/{sha}/{path}"
+
+
 class GitHubError(Exception):
     pass
 
@@ -88,9 +100,19 @@ class GitHubClient:
             raise GitHubError(f"GitHub API {res.status_code}: {res.text[:200]}")
         return res
 
+    async def _get_optional_text(self, url: str) -> str | None:
+        try:
+            res = await self.client.get(url)
+        except httpx.HTTPError:
+            return None
+        if res.status_code == 404:
+            return None
+        if res.status_code >= 400:
+            return None
+        return res.text
+
     async def fetch_pr_metadata(self, ref: PRRef) -> PRMetadata:
-        url = f"{_github_api()}/repos/{ref.owner}/{ref.repo}/pulls/{ref.number}"
-        res = await self._get(url)
+        res = await self._get(_pull_url(ref))
         d = res.json()
         return PRMetadata(
             owner=ref.owner,
@@ -123,11 +145,7 @@ class GitHubClient:
         page = 1
         per_page = 100
         while len(files) < max_files:
-            url = (
-                f"{_github_api()}/repos/{ref.owner}/{ref.repo}/pulls/{ref.number}/files"
-                f"?per_page={per_page}&page={page}"
-            )
-            res = await self._get(url)
+            res = await self._get(_pull_files_url(ref, per_page=per_page, page=page))
             batch = res.json()
             if not batch:
                 break
@@ -153,22 +171,12 @@ class GitHubClient:
         return files
 
     async def fetch_pr_diff(self, ref: PRRef) -> str:
-        url = f"{_github_api()}/repos/{ref.owner}/{ref.repo}/pulls/{ref.number}"
-        res = await self._get(url, headers={"Accept": "application/vnd.github.v3.diff"})
+        res = await self._get(_pull_url(ref), headers={"Accept": "application/vnd.github.v3.diff"})
         return res.text
 
     async def fetch_file_at_ref(self, ref: PRRef, path: str, sha: str) -> str | None:
-        """从 raw.githubusercontent.com 拿指定 commit 的文件全文。返回 None 表示不存在。"""
-        raw_url = f"{_raw_host()}/{ref.owner}/{ref.repo}/{sha}/{path}"
-        try:
-            res = await self.client.get(raw_url)
-        except httpx.HTTPError:
-            return None
-        if res.status_code == 404:
-            return None
-        if res.status_code >= 400:
-            return None
-        return res.text
+        """从 raw.githubusercontent.com 拿指定 commit 的文件全文。返回 None 表示不存在或抓取失败。"""
+        return await self._get_optional_text(_raw_file_url(ref, path, sha))
 
     async def fetch_pr_bundle(
         self,

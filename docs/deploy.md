@@ -111,8 +111,10 @@ Vercel Functions 有 60 秒超时,LLM 评审一轮通常 20-90s,大 PR 可能更
 |---|---|---|
 | `OPENAI_API_KEY` | 后端 | LLM 网关 API Key |
 | `OPENAI_BASE_URL` | 后端 | 默认 yorhamc 中转,可换其它 OpenAI 兼容服务 |
-| `PRIMARY_MODEL` 等 | 后端 | 模型档位,见 `.env.example` |
+| `PRIMARY_MODEL` 等 | 后端 | 模型配置,见 `.env.example` |
 | `GITHUB_TOKEN` | 后端 | 可选;读公开 PR 不需要,可大幅提升 rate limit |
+| `GITHUB_API_BASE` | 后端 | 可选;默认 `https://api.github.com`,网络受限时可切镜像 |
+| `GITHUB_RAW_BASE` | 后端 | 可选;默认 `https://raw.githubusercontent.com`,与 API 域名独立配置 |
 | `CORS_ORIGINS` | 后端 | 生产环境允许跨域的来源(JSON 数组) |
 | `CORS_ORIGIN_REGEX` | 后端 | 正则匹配(适合 Vercel 预览环境的动态子域) |
 | `NEXT_PUBLIC_API_BASE_URL` | 前端 | 后端公网地址 |
