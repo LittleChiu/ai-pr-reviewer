@@ -10,6 +10,10 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 
 > 七牛云 XEngineer 新工科计划 · 2026.05.29 批次 · 题三作品
+>
+> **🚀 在线演示站点**：<https://apr.littleqiu.cn/>
+>
+> **🎥 演示视频（Bilibili）**：<https://www.bilibili.com/video/BV147VQ6fEdv/>
 
 ## ✨ 这是什么
 
@@ -22,7 +26,8 @@
 
 ## 🎬 Demo
 
-> Demo 视频链接将在 D3 完成补上
+- **在线演示站点**：<https://apr.littleqiu.cn/>
+- **演示视频（Bilibili）**：<https://www.bilibili.com/video/BV147VQ6fEdv/>
 
 **真实开源 PR 实测**:见 [docs/showcases/](./docs/showcases/) — 我们对 3 个公开仓库的真实 PR(fastapi、httpx)跑了一遍评审,直接抓到例如「`await` 同步文件对象的 TypeError」、「`os.path.getsize` 频繁系统调用」这类真实工程问题。
 
