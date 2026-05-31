@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Frontend
 
-## Getting Started
+Next.js 16 前端，负责提交 GitHub PR 链接并展示结构化评审结果。
 
-First, run the development server:
+## 当前交互方式
+
+- 首页默认调用 `POST /api/review`
+- 用户提交 PR URL 后等待分析完成
+- 完成后一次性展示完整报告
+- `src/lib/api.ts` 中仍保留 `reviewPRStream()`，作为后续恢复增量反馈时的预留能力
+
+## 本地开发
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+默认读取 `NEXT_PUBLIC_API_BASE_URL`；未配置时走相对路径，由本地代理或同域部署转发到后端。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 常用命令
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+pnpm dev
+pnpm lint
+pnpm typecheck
+pnpm build
+```
 
-## Learn More
+## 关键目录
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `src/app/page.tsx` — 主页容器，负责提交、状态和结果组合
+- `src/components/` — 展示组件与健康状态组件
+- `src/lib/api.ts` — 后端 API 调用与错误解析
+- `src/lib/types.ts` — 后端 schema 的 TypeScript 镜像
+- `src/lib/markdown.ts` — 报告导出 Markdown
+- `src/lib/useRecentUrls.ts` — 最近访问 PR URL 缓存

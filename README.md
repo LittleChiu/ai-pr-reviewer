@@ -13,7 +13,7 @@
 
 ## ✨ 这是什么
 
-把 GitHub PR 链接丢进来，**SSE 流式**返回一份评审报告：
+把 GitHub PR 链接丢进来，系统会分析几十秒，**一次性返回**一份结构化评审报告：
 
 - 📋 **PR 总览** — 用人话说清楚改了什么、为什么改、改在哪些层
 - ✨ **亮点** — 值得肯定的设计点
@@ -44,10 +44,10 @@
 
 | 层 | 选型 | 为什么 |
 |---|---|---|
-| 前端 | Next.js 16 (App Router) + Tailwind 4 + TypeScript | 一键 Vercel,SSE 流式渲染体验 |
+| 前端 | Next.js 16 (App Router) + Tailwind 4 + TypeScript | 结构化报告展示,保留 stream 能力但首页当前走非流式 |
 | 后端 | FastAPI + uv + httpx | Python LLM 生态成熟,异步并发 |
-| LLM | DeepSeek V4 (主) + Claude 4.6 (兜底) + Gemini 3.1 (视觉) | 通过 OpenAI 兼容协议接 yorhamc 中转 |
-| 部署 | 前端 Vercel · 后端自建 + Cloudflare Tunnel | Vercel 60s 超时跑不完 LLM 评审 |
+| LLM | DeepSeek V4 (主) + Gemini 3.1 (视觉预留) | 通过 OpenAI 兼容协议接 yorhamc 中转 |
+| 部署 | 前端 Vercel · 后端自建 + Cloudflare Tunnel | Vercel 60s 超时不适合长时 LLM 评审 |
 
 完整方案见 [PLAN.md](./PLAN.md)，架构图见 [docs/architecture.md](./docs/architecture.md)。后端启动后访问 `http://localhost:8000/docs` 可看自动生成的 OpenAPI 文档。
 
@@ -95,16 +95,14 @@ pnpm dev
 
 ## 🧠 模型选择思路
 
-四档分工，OpenAI 兼容协议下任意切换（详见 [docs/model-strategy.md](./docs/model-strategy.md)）：
+当前默认采用两档模型（详见 [docs/model-strategy.md](./docs/model-strategy.md)）：
 
 | 档位 | 默认模型 | 用途 |
 |---|---|---|
-| **PRIMARY** | `deepseek-v4-pro-max` | 文件级深度评审 |
-| **FAST** | `deepseek-v4-flash` | 整体粗筛、attention 分类 |
-| **VISION** | `gemini-3.1-flash-lite` | PR 描述含截图时(预留) |
-| **FALLBACK** | `claude-sonnet-4-6` | 主路失败时兜底 |
+| **PRIMARY** | `deepseek-v4-pro-max` | 文本评审主模型：粗筛 + 深审 |
+| **VISION** | `gemini-3.1-flash-lite` | 多模态理解预留：PR 描述含截图时 |
 
-模型 fallback 链由调用方传入：粗筛走 `fast → fallback`，深审走 `primary → fallback`。任意主路抖动都不会中断评审。
+当前实现是**单模型调用**：文本评审统一走 `PRIMARY_MODEL`，视觉能力保留为后续扩展点。
 
 ## 📡 上下文获取方式
 
@@ -112,6 +110,7 @@ pnpm dev
 
 - 文件 patch 走 GitHub REST API（`pulls/N/files`）
 - 文件全文按需走 `raw.githubusercontent.com/<owner>/<repo>/<head_sha>/<path>`，**免 base64 解码 + 不计 GitHub API 限流**
+- 后端保留 `/api/review/stream` 能力，但当前首页默认走一次性返回完整报告的非流式流程
 - 巨型 PR 用 `max_files=300` / `max_deep_files=8` / 单文件 30K 字符截断 优雅降级
 
 详见 [docs/model-strategy.md](./docs/model-strategy.md#五上下文获取方式)。
@@ -129,7 +128,7 @@ ai-pr-reviewer/
 │   └── Dockerfile          # python:3.11-slim + uv
 ├── frontend/               # Next.js 16 前端
 │   └── src/
-│       ├── app/page.tsx    # 主页:状态机 + SSE 渲染
+│       ├── app/page.tsx    # 主页容器: 提交 / 状态 / 结果组合
 │       ├── components/     # HealthBadge 等
 │       └── lib/            # api.ts / types.ts / markdown.ts / useRecentUrls.ts
 ├── docs/

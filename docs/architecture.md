@@ -6,15 +6,15 @@
 ┌──────────────────────────────────────────────────────────────────┐
 │                         浏览器(用户)                              │
 │                                                                  │
-│  POST /api/review/stream { url: "https://github.com/.../pull/N" }│
+│  POST /api/review { url: "https://github.com/.../pull/N" }       │
 └────────────────────────────────┬─────────────────────────────────┘
-                                 │ SSE(text/event-stream)
+                                 │ HTTPS(JSON)
                                  ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │                  Next.js 16 (App Router) · Vercel                │
 │                                                                  │
-│  src/app/page.tsx          ─ 状态机 + SSE 帧解析 + 增量渲染       │
-│  src/lib/api.ts            ─ reviewPRStream(fetch + ReadableStream)│
+│  src/app/page.tsx           ─ 主页容器: 提交 / 状态 / 结果组合     │
+│  src/lib/api.ts             ─ reviewPR + reviewPRStream(预留)     │
 │  src/components/HealthBadge ─ 实时后端连通指示                   │
 └────────────────────────────────┬─────────────────────────────────┘
                                  │ HTTPS(Cloudflare Tunnel)
@@ -31,7 +31,7 @@
 │   ├─ github_client.py        异步 httpx + raw.githubusercontent  │
 │   ├─ reviewer.py             single 策略                          │
 │   ├─ reviewer_layered.py     layered 策略 + 流式                  │
-│   ├─ llm_client.py           OpenAI 兼容 + fallback 链            │
+│   ├─ llm_client.py           OpenAI 兼容 + 单模型 JSON 调用       │
 │   ├─ github_schema.py        GitHub 数据 pydantic 模型            │
 │   └─ review_schema.py        ReviewReport pydantic 模型           │
 │                                                                  │
@@ -47,6 +47,10 @@
 │ raw.githubusercontent│              │ deepseek / claude / gemini│
 └──────────────────────┘              └──────────────────────────┘
 ```
+
+当前首页默认走 `/api/review` 的非流式路径：提交 URL → 后端拉取 PR 上下文 → LLM 完成整轮评审 → 前端一次性展示完整报告。
+
+`/api/review/stream` 仍然保留，用于后续需要增量反馈时复用；下面的时序图描述的是这条**预留的流式能力**。
 
 ## 二、Layered 评审的事件流
 
@@ -79,9 +83,9 @@
 
 ## 三、关键设计决策
 
-### 决策 1:为什么前端不用 EventSource?
+### 决策 1:为什么保留 stream 客户端,但首页当前不用它?
 
-浏览器原生 \`EventSource\` 只支持 GET,我们需要传 PR URL 做 body,所以用 \`fetch + ReadableStream\` 自手动解析 SSE 帧。代码 ~30 行,不引第三方库。
+浏览器原生 \`EventSource\` 只支持 GET,而我们的 stream 端点需要 POST PR URL,所以预留实现采用 \`fetch + ReadableStream\` 手动解析 SSE 帧。当前首页默认走非流式 `reviewPR()`，降低交互复杂度；若后续要恢复增量反馈，可以直接复用现有 stream 路径。
 
 ### 决策 2:为什么 LLM 输出强制 JSON?
 
@@ -107,8 +111,8 @@ Vercel Functions 60s 超时,layered 评审一轮 30-90s,巨型 PR 更长。我�
 
 ### 决策 6:为什么用 OpenAI SDK 而不是直接 httpx?
 
-- yorhamc 网关 OpenAI 兼容,SDK 已经实现重试、错误码、流式
-- 切换主流模型(deepseek/claude/openai 等)只改 \`base_url + model\`,业务代码零改动
+- yorhamc 网关 OpenAI 兼容,SDK 已经实现重试、错误码、流式基础能力
+- 当前文本评审统一走单个主模型,切换模型只改 \`base_url + model\`,业务代码零改动
 - SDK 内置 retry-after 处理
 
 ## 四、扩展点

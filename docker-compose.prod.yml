@@ -52,4 +52,11 @@ services:
     environment:
       BACKEND_URL: http://backend:8000
     ports:
-      - "${FRO
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  cache:
