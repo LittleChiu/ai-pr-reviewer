@@ -217,7 +217,7 @@ async def review_stream(req: ReviewRequest, request: Request) -> StreamingRespon
                     break
                 try:
                     ev = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_INTERVAL_S)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield _sse(_heartbeat(stage))
                     continue
                 yield _sse(ev)

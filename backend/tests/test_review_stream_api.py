@@ -107,7 +107,9 @@ def test_review_stream_emits_accepted_and_heartbeat(monkeypatch: Any) -> None:
     monkeypatch.setattr("app.api.review.review_pr_layered_stream", fake_stream)
     monkeypatch.setattr("app.api.review.HEARTBEAT_INTERVAL_S", 0.01)
 
-    with client.stream("POST", "/api/review/stream", json={"url": "https://github.com/o/r/pull/1"}) as res:
+    with client.stream(
+        "POST", "/api/review/stream", json={"url": "https://github.com/o/r/pull/1"}
+    ) as res:
         body = "".join(res.iter_text())
 
     assert res.status_code == 200
@@ -134,7 +136,9 @@ def test_review_stream_fetch_error_after_accepted(monkeypatch: Any) -> None:
     monkeypatch.setattr("app.api.review.review_pr_layered_stream", fake_stream)
     monkeypatch.setattr("app.api.review.HEARTBEAT_INTERVAL_S", 0.01)
 
-    with client.stream("POST", "/api/review/stream", json={"url": "https://github.com/o/r/pull/1"}) as res:
+    with client.stream(
+        "POST", "/api/review/stream", json={"url": "https://github.com/o/r/pull/1"}
+    ) as res:
         body = "".join(res.iter_text())
 
     assert res.status_code == 200
