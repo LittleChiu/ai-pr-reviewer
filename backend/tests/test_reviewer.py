@@ -51,13 +51,13 @@ def test_build_user_prompt_contains_key_fields() -> None:
 
 
 class FakeLLM:
-    def __init__(self, payload: str) -> None:
-        self._payload = payload
+    def __init__(self, payloads: str | list[str]) -> None:
+        self._payloads = [payloads] if isinstance(payloads, str) else list(payloads)
         self.calls: list[dict] = []
 
     async def chat_json(self, **kw: Any) -> LLMResponse:
         self.calls.append(kw)
-        return LLMResponse(content=self._payload, model=kw["model"])
+        return LLMResponse(content=self._payloads.pop(0), model=kw["model"])
 
 
 @pytest.mark.asyncio
@@ -82,3 +82,17 @@ async def test_review_pr_parses_response() -> None:
     assert report.risks[0].file == "a.py"
     assert report.model == "m1"
     assert fake.calls[0]["model"] == "m1"
+
+
+@pytest.mark.asyncio
+async def test_review_pr_retries_when_first_json_is_malformed() -> None:
+    fake = FakeLLM(
+        [
+            '{"summary": "bad"',
+            '{"summary": "修复成功", "highlights": [], "risks": [], "suggestions": []}',
+        ]
+    )
+    report = await review_pr(_make_bundle(), llm=fake, primary_model="m1")  # type: ignore[arg-type]
+    assert report.summary == "修复成功"
+    assert report.token_usage.llm_calls == 2
+    assert len(fake.calls) == 2

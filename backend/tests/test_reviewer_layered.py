@@ -198,3 +198,41 @@ async def test_layered_review_handles_deep_failure() -> None:
     )
     assert report.summary == "test"
     assert report.risks == []
+
+
+@pytest.mark.asyncio
+async def test_layered_review_falls_back_when_triage_json_stays_malformed() -> None:
+    deep_a = json.dumps(
+        {
+            "risks": [
+                {
+                    "file": "a.py",
+                    "severity": "medium",
+                    "category": "bug",
+                    "title": "fallback still reviews file",
+                    "detail": "triage JSON 坏掉后仍继续深审",
+                    "confidence": "high",
+                }
+            ],
+            "suggestions": [],
+        }
+    )
+    fake = FakeLLM(
+        [
+            '{"summary": "bad"',
+            '{"summary": "still bad"',
+            deep_a,
+        ]
+    )
+    report = await review_pr_layered(
+        _make_bundle(["a.py"]),
+        ref=PRRef(owner="o", repo="r", number=1),
+        llm=fake,  # type: ignore[arg-type]
+        gh=None,
+        primary_model="P",
+        max_deep_files=1,
+    )
+    assert report.summary == ""
+    assert len(report.risks) == 1
+    assert report.risks[0].file == "a.py"
+    assert len(fake.calls) == 3

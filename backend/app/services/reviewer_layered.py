@@ -31,7 +31,7 @@ from typing import Any
 from app.core.config import get_settings
 from app.services.github_client import GitHubClient
 from app.services.github_schema import PRBundle, PRFile
-from app.services.llm_client import LLMClient, TokenUsage, extract_json
+from app.services.llm_client import LLMClient, LLMError, TokenUsage, chat_json_with_parse_retry
 from app.services.pr_url import PRRef
 from app.services.review_schema import ReviewReport, RiskItem, Suggestion
 from app.services.review_schema import TokenUsage as ReportTokenUsage
@@ -145,14 +145,15 @@ async def _triage(
     *,
     model: str,
 ) -> tuple[dict, TokenUsage]:
-    resp = await llm.chat_json(
+    data, resp = await chat_json_with_parse_retry(
+        llm,
         model=model,
         system=TRIAGE_SYSTEM,
         user=_triage_user_prompt(bundle),
         max_tokens=2048,
         temperature=0.2,
     )
-    return extract_json(resp.content), resp.usage
+    return data, resp.usage
 
 
 async def _deep_review_one(
@@ -162,14 +163,33 @@ async def _deep_review_one(
     *,
     model: str,
 ) -> tuple[dict, TokenUsage]:
-    resp = await llm.chat_json(
+    data, resp = await chat_json_with_parse_retry(
+        llm,
         model=model,
         system=DEEP_REVIEW_SYSTEM,
         user=_deep_review_user_prompt(file, full_content),
         max_tokens=2048,
         temperature=0.2,
     )
-    return extract_json(resp.content), resp.usage
+    return data, resp.usage
+
+
+def _fallback_triage(bundle: PRBundle, *, max_deep_files: int) -> dict[str, Any]:
+    deep_files = {
+        f.filename for f in sorted(bundle.files, key=lambda item: -item.changes)[:max_deep_files]
+    }
+    return {
+        "summary": "",
+        "highlights": [],
+        "files": [
+            {
+                "filename": f.filename,
+                "attention": "deep" if f.filename in deep_files else "skip",
+                "reason": "triage_fallback_by_changes",
+            }
+            for f in bundle.files
+        ],
+    }
 
 
 _SEVERITY_RANK = {"high": 0, "medium": 1, "low": 2}
@@ -194,7 +214,12 @@ async def review_pr_layered(
     total_usage = TokenUsage()
 
     # 第一层:粗筛
-    triage, triage_usage = await _triage(bundle, client, model=pm)
+    try:
+        triage, triage_usage = await _triage(bundle, client, model=pm)
+    except LLMError as e:
+        logger.warning("triage returned malformed JSON, fallback to changes-based selection: %s", e)
+        triage = _fallback_triage(bundle, max_deep_files=max_deep_files)
+        triage_usage = TokenUsage()
     total_usage.add(triage_usage)
     summary = triage.get("summary", "")
     highlights = triage.get("highlights", []) or []
@@ -317,6 +342,12 @@ async def review_pr_layered_stream(
     # 第一层
     try:
         triage, triage_usage = await _triage(bundle, client, model=pm)
+    except LLMError as e:
+        logger.warning(
+            "stream triage returned malformed JSON, fallback to changes-based selection: %s", e
+        )
+        triage = _fallback_triage(bundle, max_deep_files=max_deep_files)
+        triage_usage = TokenUsage()
     except Exception as e:
         logger.exception("triage failed")
         yield ReviewEvent("error", {"stage": "triage", "message": str(e)})

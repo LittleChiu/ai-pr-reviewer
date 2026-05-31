@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import time
 
+from pydantic import ValidationError
+
 from app.core.config import get_settings
 from app.services.github_schema import PRBundle
-from app.services.llm_client import LLMClient, extract_json
+from app.services.llm_client import LLMClient, LLMError, chat_json_with_parse_retry
 from app.services.review_schema import ReviewReport
 from app.services.review_schema import TokenUsage as ReportTokenUsage
 
@@ -100,21 +102,24 @@ async def review_pr(
     model = primary_model or s.primary_model
     user_prompt = _build_user_prompt(bundle)
     t0 = time.time()
-    resp = await client.chat_json(
+    data, resp = await chat_json_with_parse_retry(
+        client,
         model=model,
         system=SYSTEM_PROMPT,
         user=user_prompt,
         max_tokens=4096,
         temperature=0.2,
     )
-    data = extract_json(resp.content)
-    report = ReviewReport(**data)
+    try:
+        report = ReviewReport(**data)
+    except ValidationError as e:
+        raise LLMError(f"模型输出 JSON 结构不符合 ReviewReport schema: {e}") from e
     report.model = resp.model
     report.elapsed_ms = int((time.time() - t0) * 1000)
     report.token_usage = ReportTokenUsage(
         prompt_tokens=resp.usage.prompt_tokens,
         completion_tokens=resp.usage.completion_tokens,
         total_tokens=resp.usage.total_tokens,
-        llm_calls=1,
+        llm_calls=resp.usage.llm_calls,
     )
     return report
