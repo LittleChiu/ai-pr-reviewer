@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     vision_model: str = "gemini-3.1-flash-lite"
 
     github_token: str = ""
-    github_api_base: str = "https://api.kkgithub.com"
-    github_raw_base: str = "https://raw.kkgithub.com"
+    github_api_base: str = "https://api.github.com"
+    github_raw_base: str = "https://raw.githubusercontent.com"
 
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
@@ -37,4 +37,4 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    return Setti

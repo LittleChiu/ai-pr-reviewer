@@ -29,8 +29,8 @@ services:
       PRIMARY_MODEL: ${PRIMARY_MODEL:-deepseek-v4-pro-max}
       VISION_MODEL: ${VISION_MODEL:-gemini-3.1-flash-lite}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-      GITHUB_API_BASE: ${GITHUB_API_BASE:-https://api.kkgithub.com}
-      GITHUB_RAW_BASE: ${GITHUB_RAW_BASE:-https://raw.kkgithub.com}
+      GITHUB_API_BASE: ${GITHUB_API_BASE:-https://api.github.com}
+      GITHUB_RAW_BASE: ${GITHUB_RAW_BASE:-https://raw.githubusercontent.com}
       CACHE_ENABLED: ${CACHE_ENABLED:-true}
       CACHE_DB_PATH: /data/cache.db
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000"]}'
@@ -52,11 +52,4 @@ services:
     environment:
       BACKEND_URL: http://backend:8000
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
-    depends_on:
-      backend:
-        condition: service_healthy
-    restart: unless-stopped
-
-volumes:
-  cache:
+      - "${FRO
