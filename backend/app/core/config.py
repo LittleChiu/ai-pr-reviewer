@@ -13,15 +13,14 @@ class Settings(BaseSettings):
     )
 
     openai_api_key: str = ""
-    openai_base_url: str = "https://your-gateway.example.com/v1"
+    openai_base_url: str = "https://yorhamc.com/v1"
 
-    primary_model: str = "deepseek-v4-flash"
-    model_fallback: str = "deepseek-v4-pro-max"
+    primary_model: str = "deepseek-v4-pro-max"
     vision_model: str = "gemini-3.1-flash-lite"
 
     github_token: str = ""
-    github_api_base: str = "https://api.github.com"
-    github_raw_base: str = "https://raw.githubusercontent.com"
+    github_api_base: str = "https://api.kkgithub.com"
+    github_raw_base: str = "https://raw.kkgithub.com"
 
     backend_host: str = "0.0.0.0"
     backend_port: int = 8000
@@ -34,7 +33,6 @@ class Settings(BaseSettings):
 
     cache_enabled: bool = True
     cache_db_path: str = "./data/cache.db"
-    vision_enabled: bool = True
 
 
 @lru_cache

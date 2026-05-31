@@ -57,7 +57,7 @@ class FakeLLM:
 
     async def chat_json(self, **kw: Any) -> LLMResponse:
         self.calls.append(kw)
-        return LLMResponse(content=self._payload, model=kw["models"][0])
+        return LLMResponse(content=self._payload, model=kw["model"])
 
 
 @pytest.mark.asyncio
@@ -81,4 +81,4 @@ async def test_review_pr_parses_response() -> None:
     assert len(report.risks) == 1
     assert report.risks[0].file == "a.py"
     assert report.model == "m1"
-    assert fake.calls[0]["models"][0] == "m1"
+    assert fake.calls[0]["model"] == "m1"

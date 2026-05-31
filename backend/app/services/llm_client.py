@@ -1,6 +1,6 @@
-"""LLM 客户端:封装 OpenAI 兼容协议,支持模型 fallback 链。
+"""LLM 客户端:封装 OpenAI 兼容协议。
 
-主路径:primary -> fallback。响应固定要求 JSON 模式。
+单模型调用,无候选/fallback 链。响应固定要求 JSON 模式。
 """
 
 from __future__ import annotations
@@ -9,9 +9,8 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any
 
-from openai import APIError, AsyncOpenAI
+from openai import AsyncOpenAI
 
 from app.core.config import get_settings
 
@@ -44,7 +43,7 @@ class LLMResponse:
 
 
 class LLMClient:
-    """统一调用入口。OpenAI 兼容协议,base_url 指向 LLM 网关。"""
+    """统一调用入口。OpenAI 兼容协议,base_url 指向 yorhamc 网关。"""
 
     def __init__(
         self,
@@ -61,94 +60,33 @@ class LLMClient:
     async def chat_json(
         self,
         *,
-        models: list[str],
+        model: str,
         system: str,
         user: str,
         max_tokens: int = 4096,
         temperature: float = 0.2,
-        retries_per_model: int = 2,
     ) -> LLMResponse:
-        """按顺序尝试 models 中的模型,任一成功即返回。要求模型输出 JSON 字符串。
-
-        每个模型支持 retries_per_model 次重试(默认 2 次,共 3 次尝试)。
-        网关偶尔返回空内容或瞬时抖动,重试通常能恢复。
-        """
-        last_error: Exception | None = None
-        for model in models:
-            for attempt in range(retries_per_model + 1):
-                try:
-                    logger.info(
-                        "LLM call: model=%s (attempt %d/%d)",
-                        model,
-                        attempt + 1,
-                        retries_per_model + 1,
-                    )
-                    resp = await self._client.chat.completions.create(
-                        model=model,
-                        messages=[
-                            {"role": "system", "content": system},
-                            {"role": "user", "content": user},
-                        ],
-                        max_tokens=max_tokens,
-                        temperature=temperature,
-                    )
-                    content = (resp.choices[0].message.content or "").strip()
-                    if not content:
-                        raise LLMError(f"模型 {model} 返回空内容")
-                    usage = TokenUsage()
-                    if resp.usage is not None:
-                        usage.prompt_tokens = resp.usage.prompt_tokens or 0
-                        usage.completion_tokens = resp.usage.completion_tokens or 0
-                        usage.total_tokens = resp.usage.total_tokens or 0
-                    usage.llm_calls = 1
-                    return LLMResponse(content=content, model=model, usage=usage)
-                except (APIError, LLMError) as e:
-                    logger.warning("LLM model %s attempt %d failed: %s", model, attempt + 1, e)
-                    last_error = e
-                    continue
-        raise LLMError(f"所有候选模型都调用失败,最后一次错误: {last_error}")
-
-    async def analyze_images(
-        self,
-        *,
-        model: str,
-        image_urls: list[str],
-        prompt: str = "描述这张图片的内容,用中文回答。关注框架、架构、数据流等关键信息。",
-        max_tokens: int = 1024,
-        max_images: int = 3,
-    ) -> LLMResponse | None:
-        """用 vision 模型分析图片,返回文字描述。最多分析 max_images 张。
-
-        失败时返回 None(不抛异常),因为图片分析是评审的辅助信息,
-        不应因视觉模型不可用而阻塞主评审流程。
-        """
-        if not image_urls:
-            return None
-        urls = image_urls[:max_images]
-        content_parts: list[Any] = [{"type": "text", "text": prompt}]
-        for url in urls:
-            content_parts.append({"type": "image_url", "image_url": {"url": url}})
-        try:
-            logger.info("vision analysis: model=%s images=%d", model, len(urls))
-            resp = await self._client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": content_parts}],  # type: ignore[arg-type]
-                max_tokens=max_tokens,
-            )
-            text = (resp.choices[0].message.content or "").strip()
-            if not text:
-                logger.warning("vision model %s returned empty content", model)
-                return None
-            usage = TokenUsage()
-            if resp.usage is not None:
-                usage.prompt_tokens = resp.usage.prompt_tokens or 0
-                usage.completion_tokens = resp.usage.completion_tokens or 0
-                usage.total_tokens = resp.usage.total_tokens or 0
-            usage.llm_calls = 1
-            return LLMResponse(content=text, model=model, usage=usage)
-        except (APIError, LLMError) as e:
-            logger.warning("vision analysis failed for model %s: %s", model, e)
-            return None
+        """调用单个模型,要求输出 JSON 字符串。"""
+        logger.info("LLM call: model=%s", model)
+        resp = await self._client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        content = (resp.choices[0].message.content or "").strip()
+        if not content:
+            raise LLMError(f"模型 {model} 返回空内容")
+        usage = TokenUsage()
+        if resp.usage is not None:
+            usage.prompt_tokens = resp.usage.prompt_tokens or 0
+            usage.completion_tokens = resp.usage.completion_tokens or 0
+            usage.total_tokens = resp.usage.total_tokens or 0
+        usage.llm_calls = 1
+        return LLMResponse(content=content, model=model, usage=usage)
 
 
 def extract_json(text: str) -> dict:

@@ -9,8 +9,6 @@
 
 from __future__ import annotations
 
-import base64
-
 import httpx
 
 from app.core.config import get_settings
@@ -39,7 +37,7 @@ class RateLimitedError(GitHubError):
 
 
 class GitHubClient:
-    def __init__(self, token: str | None = None, timeout: float = 60.0) -> None:
+    def __init__(self, token: str | None = None, timeout: float = 30.0) -> None:
         self._token = token or get_settings().github_token or None
         self._timeout = timeout
         self._client: httpx.AsyncClient | None = None
@@ -150,25 +148,17 @@ class GitHubClient:
         return res.text
 
     async def fetch_file_at_ref(self, ref: PRRef, path: str, sha: str) -> str | None:
-        """拿指定 commit 的文件全文。先走 raw endpoint，失败则 fallback 到 API。"""
+        """从 raw.githubusercontent.com 拿指定 commit 的文件全文。返回 None 表示不存在。"""
         raw_url = f"{_raw_host()}/{ref.owner}/{ref.repo}/{sha}/{path}"
         try:
             res = await self.client.get(raw_url)
-            if res.status_code == 200:
-                return res.text
         except httpx.HTTPError:
-            pass
-        # raw 拿不到，用 API content endpoint(需要 base64 解码)
-        try:
-            api_url = f"{_github_api()}/repos/{ref.owner}/{ref.repo}/contents/{path}?ref={sha}"
-            res = await self._get(api_url)
-            data = res.json()
-            content = data.get("content", "")
-            if content:
-                return base64.b64decode(content).decode("utf-8", errors="replace")
-        except Exception:
-            pass
-        return None
+            return None
+        if res.status_code == 404:
+            return None
+        if res.status_code >= 400:
+            return None
+        return res.text
 
     async def fetch_pr_bundle(
         self,

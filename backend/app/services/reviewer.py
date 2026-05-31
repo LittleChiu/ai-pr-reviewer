@@ -97,11 +97,11 @@ async def review_pr(
 ) -> ReviewReport:
     s = get_settings()
     client = llm or LLMClient()
-    models = [primary_model or s.primary_model]
+    model = primary_model or s.primary_model
     user_prompt = _build_user_prompt(bundle)
     t0 = time.time()
     resp = await client.chat_json(
-        models=models,
+        model=model,
         system=SYSTEM_PROMPT,
         user=user_prompt,
         max_tokens=4096,

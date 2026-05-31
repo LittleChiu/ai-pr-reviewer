@@ -69,14 +69,14 @@
 
 ## 三、不同模型的差异(实测观察)
 
-| 维度 | DeepSeek V4 Pro Max | Claude Sonnet 4.6 | Gemini 3.1 Flash Lite |
+| 维度 | DeepSeek V4 Pro Max | Gemini 3.1 Flash Lite |
 |---|---|---|---|
-| JSON 遵守度 | ★★★★☆ | ★★★★★ | ★★★★ |
-| 务实程度 | ★★★★★ | ★★★★ (偶尔啰嗦) | ★★★★ |
-| 中文流畅度 | ★★★★★ | ★★★★★ | ★★★★ |
-| 速度(单文件深审) | 8-15s | 12-20s | 3-6s |
-| 价格(粗略) | ¥0.5/M tokens | $3/M tokens | $0.075/M tokens |
-| 适合的档位 | **PRIMARY**(深审) | **FALLBACK**(兜底) | **FAST/VISION**(粗筛/视觉) |
+| JSON 遵守度 | ★★★★☆ | ★★★★ |
+| 务实程度 | ★★★★★ | ★★★★ |
+| 中文流畅度 | ★★★★★ | ★★★★ |
+| 速度(单文件深审) | 8-15s | 3-6s |
+| 价格(粗略) | ¥0.5/M tokens | $0.075/M tokens |
+| 用途 | **PRIMARY**(粗筛+深审) | **VISION**(多模态) |
 
 DeepSeek 是当前最优"性价比 + 中文 + 务实",所以默认 PRIMARY。
 
