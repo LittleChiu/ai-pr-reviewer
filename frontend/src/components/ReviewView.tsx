@@ -42,8 +42,10 @@ export function ReviewView({ state, loading, prUrl }: { state: ReviewState; load
   }
 
   const report = state.report;
-  const risks = report?.risks ?? [];
-  const suggestions = report?.suggestions ?? [];
+  const summary = report?.summary || state.summary;
+  const highlights = report?.highlights.length ? report.highlights : state.highlights;
+  const risks = report?.risks.length ? report.risks : state.risks;
+  const suggestions = report?.suggestions.length ? report.suggestions : state.suggestions;
 
   return (
     <div className="space-y-6">
@@ -51,29 +53,21 @@ export function ReviewView({ state, loading, prUrl }: { state: ReviewState; load
 
       {state.errorMsg && <InlineError title="评审失败" message={state.errorMsg} />}
 
-      {loading && !report && (
-        <Card className="p-5 text-center md:p-6">
-          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />
-          <div className="text-sm font-semibold">正在分析 PR</div>
-          <p className="mt-2 text-xs leading-5 text-[var(--muted-fg)]">
-            正在获取 PR 信息、变更文件和相关上下文。分析完成后会显示完整报告。
-          </p>
-        </Card>
-      )}
+      {loading && !report && <ReviewProgressCard state={state} />}
 
-      {report?.summary && (
+      {summary && (
         <Section title="PR 总览" eyebrow="Summary">
           <Card className="p-5 md:p-6">
-            <p className="whitespace-pre-wrap text-sm leading-7 text-[var(--foreground)]">{report.summary}</p>
+            <p className="whitespace-pre-wrap text-sm leading-7 text-[var(--foreground)]">{summary}</p>
           </Card>
         </Section>
       )}
 
-      {report && report.highlights.length > 0 && (
+      {highlights.length > 0 && (
         <Section title="亮点" eyebrow="Highlights">
           <Card className="p-5">
             <ul className="grid gap-2 text-sm md:grid-cols-2">
-              {report.highlights.map((h, i) => (
+              {highlights.map((h, i) => (
                 <li key={i} className="flex gap-2.5 rounded-xl bg-emerald-500/5 px-3 py-2">
                   <span className="mt-0.5 text-emerald-500">✓</span>
                   <span>{h}</span>
@@ -128,8 +122,9 @@ export function ReviewView({ state, loading, prUrl }: { state: ReviewState; load
 
 function ReviewHeader({ state, loading, risks, suggestions }: { state: ReviewState; loading: boolean; risks: number; suggestions: number }) {
   const report = state.report;
-  const progress = report ? 100 : loading ? 56 : state.errorMsg ? 100 : 0;
-  const phase = report ? "评审完成" : loading ? "分析中" : state.errorMsg ? "评审中断" : "准备中";
+  const progress = getProgressPercent(state, loading);
+  const phase = phaseLabel(state, report);
+  const meta = state.meta;
 
   return (
     <Card className="overflow-hidden p-0 shadow-[var(--shadow-md)]">
@@ -138,11 +133,17 @@ function ReviewHeader({ state, loading, risks, suggestions }: { state: ReviewSta
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-[var(--muted-fg)]">
               <code className="rounded-full bg-[var(--card)] px-2.5 py-1 text-[var(--foreground)] shadow-[var(--shadow-sm)]">{state.prLabel}</code>
+              {meta?.fromCache && (
+                <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-600 dark:text-emerald-300">
+                  缓存命中
+                </span>
+              )}
             </div>
             <h2 className="truncate text-base font-semibold md:text-lg">{phase}</h2>
+            {meta?.title && <p className="mt-1 truncate text-sm text-[var(--muted-fg)]">{meta.title}</p>}
           </div>
           <code className="shrink-0 rounded-full bg-[var(--primary-soft)] px-3 py-1.5 text-xs text-[var(--primary-hover)]">
-            {report?.model || "layered"}
+            {meta?.model || report?.model || "layered"}
           </code>
         </div>
       </div>
@@ -150,8 +151,11 @@ function ReviewHeader({ state, loading, risks, suggestions }: { state: ReviewSta
         <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
           <MetricCard label="风险" value={risks.toLocaleString()} tone={risks > 0 ? "danger" : "neutral"} />
           <MetricCard label="建议" value={suggestions.toLocaleString()} />
-          <MetricCard label="LLM 调用" value={report ? report.token_usage.llm_calls.toLocaleString() : "--"} />
-          <MetricCard label="耗时" value={report ? `${(report.elapsed_ms / 1000).toFixed(1)}s` : "分析中"} />
+          <MetricCard
+            label="深审进度"
+            value={state.progress.deepFilesTotal > 0 ? `${state.progress.deepFilesDone}/${state.progress.deepFilesTotal}` : loading ? "准备中" : "--"}
+          />
+          <MetricCard label="耗时" value={report ? `${(report.elapsed_ms / 1000).toFixed(1)}s` : loading ? "进行中" : "--"} />
         </div>
         <div className="flex items-center justify-between gap-3 text-xs text-[var(--muted-fg)]">
           <span>{phase}</span>
@@ -161,6 +165,22 @@ function ReviewHeader({ state, loading, risks, suggestions }: { state: ReviewSta
           <div className="h-full rounded-full bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 transition-all duration-500" style={{ width: `${progress}%` }} />
         </div>
       </div>
+    </Card>
+  );
+}
+
+function ReviewProgressCard({ state }: { state: ReviewState }) {
+  const statusText = progressText(state);
+  const heartbeatText = heartbeatStatus(state.lastEventAt);
+
+  return (
+    <Card className="p-5 text-center md:p-6">
+      <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />
+      <div className="text-sm font-semibold">{statusText}</div>
+      <p className="mt-2 text-xs leading-5 text-[var(--muted-fg)]">
+        {heartbeatText}
+        {state.progress.currentFile ? ` · 当前文件：${state.progress.currentFile}` : ""}
+      </p>
     </Card>
   );
 }
@@ -251,7 +271,7 @@ function EmptyState() {
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary-soft)] text-2xl">📄</div>
         <h2 className="text-lg font-semibold tracking-tight">输入 PR 链接开始评审</h2>
         <p className="mt-2 text-sm leading-6 text-[var(--muted-fg)]">
-          系统会返回 PR 总览、潜在风险和修改建议。AI 评审结果仅作为辅助判断，最终仍应由 reviewer 结合项目上下文确认。
+          系统会先显示连接与评审进度，再逐步返回 PR 总览、潜在风险和修改建议。AI 结果仅作为辅助判断，最终仍应由 reviewer 结合项目上下文确认。
         </p>
       </div>
     </Card>
@@ -269,7 +289,6 @@ function NoIssueCard() {
 
 function CopyMarkdownButton({ report, prUrl }: { report: ReviewReport; prUrl: string }) {
   const [copied, setCopied] = useState(false);
-
 
   async function onCopy() {
     try {
@@ -301,4 +320,46 @@ export function DecorativeBackground() {
       <div className="absolute bottom-0 left-[-10%] h-96 w-96 rounded-full bg-emerald-300/15 blur-3xl" />
     </div>
   );
+}
+
+function getProgressPercent(state: ReviewState, loading: boolean): number {
+  if (state.report || state.phase === "done") return 100;
+  if (state.phase === "error") return 100;
+  if (!loading) return 0;
+  if (state.phase === "fetching") return 12;
+  if (state.phase === "triaging") return 34;
+  if (state.phase === "reviewing") {
+    if (state.progress.deepFilesTotal > 0) {
+      return 40 + Math.round((state.progress.deepFilesDone / state.progress.deepFilesTotal) * 55);
+    }
+    return 56;
+  }
+  return 8;
+}
+
+function phaseLabel(state: ReviewState, report: ReviewReport | null): string {
+  if (report || state.phase === "done") return "评审完成";
+  if (state.phase === "fetching") return "正在获取 PR";
+  if (state.phase === "triaging") return "正在粗筛改动";
+  if (state.phase === "reviewing") return "正在深度评审";
+  if (state.phase === "error") return "评审中断";
+  return "准备中";
+}
+
+function progressText(state: ReviewState): string {
+  if (state.phase === "fetching") return "已接收请求，正在拉取 PR 元信息与 diff";
+  if (state.phase === "triaging") return "正在进行第一轮粗筛，准备挑出高关注文件";
+  if (state.phase === "reviewing") {
+    if (state.progress.deepFilesTotal > 0) {
+      return `正在逐文件深审（${state.progress.deepFilesDone}/${state.progress.deepFilesTotal}）`;
+    }
+    return "正在进入深审阶段";
+  }
+  return "正在分析 PR";
+}
+
+function heartbeatStatus(lastEventAt: number | null): string {
+  if (!lastEventAt) return "正在建立连接...";
+  const seconds = Math.max(0, Math.floor((Date.now() - lastEventAt) / 1000));
+  return seconds <= 1 ? "连接活跃，刚刚收到事件/心跳" : `连接活跃，最近 ${seconds}s 前收到事件/心跳`;
 }

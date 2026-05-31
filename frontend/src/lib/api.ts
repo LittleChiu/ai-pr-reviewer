@@ -99,6 +99,21 @@ export async function checkHealth(signal?: AbortSignal): Promise<{
 
 export type StreamEvent =
   | {
+      type: "accepted";
+      data: {
+        pr: string;
+        stage: string;
+        ts: number;
+      };
+    }
+  | {
+      type: "heartbeat";
+      data: {
+        stage: string;
+        ts: number;
+      };
+    }
+  | {
       type: "started";
       data: {
         pr: string;
