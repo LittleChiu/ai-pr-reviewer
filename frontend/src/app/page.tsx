@@ -8,8 +8,6 @@ import { HealthBadge } from "@/components/HealthBadge";
 import { useRecentUrls } from "@/lib/useRecentUrls";
 import { reportToMarkdown } from "@/lib/markdown";
 
-const SAMPLE_PR_URL = "https://github.com/tiangolo/fastapi/pull/15603";
-
 const SEVERITY_BAR: Record<Severity, string> = {
   high: "bg-[var(--severity-high-bar)]",
   medium: "bg-[var(--severity-medium-bar)]",
@@ -93,47 +91,34 @@ export default function Home() {
   return (
     <main className="relative min-h-screen overflow-hidden">
       <DecorativeBackground />
-      <div className="mx-auto max-w-5xl px-5 py-10 md:px-8 md:py-16">
-        <header className="mb-8 md:mb-10">
-          <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-xs text-[var(--muted-fg)] shadow-[var(--shadow-sm)]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--primary)]" />
-              七牛云 XEngineer · AI PR Review
+      <div className="mx-auto max-w-4xl px-5 py-10 md:px-8 md:py-14">
+        <header className="mb-8">
+          <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-semibold tracking-tight">AI PR Review</p>
+              <p className="mt-1 text-xs text-[var(--muted-fg)]">面向代码评审的辅助分析工具</p>
             </div>
             <HealthBadge />
           </div>
-          <div className="grid gap-6 md:grid-cols-[1.45fr_0.85fr] md:items-end">
-            <div>
-              <h1 className="max-w-3xl text-4xl font-semibold tracking-[-0.04em] md:text-6xl">
-                把 PR 变成一份可执行的评审报告
-              </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted-fg)] md:text-base">
-                跨文件上下文、三层 Prompt、置信度标注和稳定异步分析，帮 reviewer 快速抓住真正值得看的风险点。
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <HeroPill value="3 层" label="粗筛 → 深审 → 聚合" />
-              <HeroPill value="Async" label="稳定完整返回" />
-              <HeroPill value="Cache" label="按 commit 复用" />
-              <HeroPill value="JSON" label="结构化报告" />
-            </div>
+          <div>
+            <h1 className="max-w-2xl text-3xl font-semibold tracking-[-0.03em] md:text-5xl">
+              分析 Pull Request，生成结构化评审报告
+            </h1>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted-fg)] md:text-base">
+              输入 GitHub PR 链接，系统会结合变更内容和相关上下文，整理总结、风险和可执行建议，供 reviewer 参考。
+            </p>
           </div>
         </header>
 
-        <Card className="mb-8 p-3 shadow-[var(--shadow-md)] md:p-4">
+        <Card className="mb-8 p-4 shadow-[var(--shadow-md)] md:p-5">
           <form onSubmit={onSubmit}>
-            <div className="mb-3 flex flex-col gap-1 px-1 md:flex-row md:items-end md:justify-between">
-              <div>
-                <label htmlFor="pr-url" className="text-sm font-semibold tracking-tight">
-                  GitHub PR 链接
-                </label>
-                <p className="mt-1 text-xs text-[var(--muted-fg)]">
-                  粘贴公开 PR，后端会用 layered 策略完成分析后一次性返回完整报告。
-                </p>
-              </div>
-              <span className="text-xs text-[var(--muted-fg)]">稳定异步模式 · 支持缓存</span>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <label htmlFor="pr-url" className="text-sm font-semibold tracking-tight">
+              GitHub PR 链接
+            </label>
+            <p className="mt-1 text-xs text-[var(--muted-fg)]">
+              支持公开仓库。分析过程可能需要几十秒，完成后会一次性返回完整报告。
+            </p>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               <div className="relative flex-1 rounded-[var(--radius-sm)] bg-[var(--muted)]/70 ring-1 ring-transparent transition focus-within:bg-[var(--card)] focus-within:ring-[var(--primary)]/40">
                 <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-[var(--muted-fg)]">
                   🔗
@@ -176,31 +161,26 @@ export default function Home() {
               )}
             </div>
           </form>
-          <div className="mt-3 flex flex-wrap gap-2 px-1">
-            {recent.slice(0, 3).map((u) => (
-              <button
-                key={u}
-                type="button"
-                onClick={() => setUrl(u)}
-                disabled={loading}
-                className="max-w-full truncate rounded-full border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted-fg)] transition hover:border-[var(--primary)]/50 hover:text-[var(--foreground)] disabled:opacity-50"
-                title={u}
-              >
-                最近：{u.replace("https://github.com/", "")}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setUrl(SAMPLE_PR_URL)}
-              disabled={loading}
-              className="rounded-full bg-[var(--primary-soft)] px-3 py-1.5 text-xs font-medium text-[var(--primary-hover)] transition hover:opacity-80 disabled:opacity-50"
-            >
-              试试公开样例
-            </button>
-          </div>
+
+          {recent.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {recent.slice(0, 3).map((u) => (
+                <button
+                  key={u}
+                  type="button"
+                  onClick={() => setUrl(u)}
+                  disabled={loading}
+                  className="max-w-full truncate rounded-full border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted-fg)] transition hover:border-[var(--primary)]/50 hover:text-[var(--foreground)] disabled:opacity-50"
+                  title={u}
+                >
+                  {u.replace("https://github.com/", "")}
+                </button>
+              ))}
+            </div>
+          )}
         </Card>
 
-        {!state.startedAt && <EmptyState onPickSample={() => setUrl(SAMPLE_PR_URL)} />}
+        {!state.startedAt && <EmptyState />}
         {state.startedAt && <ReviewView state={state} loading={loading} prUrl={url} />}
       </div>
     </main>
@@ -221,9 +201,9 @@ function ReviewView({ state, loading, prUrl }: { state: ReviewState; loading: bo
       {loading && !report && (
         <Card className="p-5 text-center md:p-6">
           <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />
-          <div className="text-sm font-semibold">正在稳定模式评审中</div>
+          <div className="text-sm font-semibold">正在分析 PR</div>
           <p className="mt-2 text-xs leading-5 text-[var(--muted-fg)]">
-            这次使用非流式 /api/review 接口，后端完成 GitHub 拉取、粗筛、深审和聚合后会一次性返回完整报告。
+            正在获取 PR 信息、变更文件和相关上下文。分析完成后会显示完整报告。
           </p>
         </Card>
       )}
@@ -293,7 +273,7 @@ function ReviewView({ state, loading, prUrl }: { state: ReviewState; loading: bo
 function ReviewHeader({ state, loading, risks, suggestions }: { state: ReviewState; loading: boolean; risks: number; suggestions: number }) {
   const report = state.report;
   const progress = report ? 100 : loading ? 56 : state.errorMsg ? 100 : 0;
-  const phase = report ? "评审完成" : loading ? "异步评审中" : state.errorMsg ? "评审中断" : "准备中";
+  const phase = report ? "评审完成" : loading ? "分析中" : state.errorMsg ? "评审中断" : "准备中";
 
   return (
     <Card className="overflow-hidden p-0 shadow-[var(--shadow-md)]">
@@ -302,7 +282,6 @@ function ReviewHeader({ state, loading, risks, suggestions }: { state: ReviewSta
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-[var(--muted-fg)]">
               <code className="rounded-full bg-[var(--card)] px-2.5 py-1 text-[var(--foreground)] shadow-[var(--shadow-sm)]">{state.prLabel}</code>
-              <span className="rounded-full bg-[var(--primary-soft)] px-2.5 py-1 font-medium text-[var(--primary-hover)]">稳定异步模式</span>
             </div>
             <h2 className="truncate text-base font-semibold md:text-lg">{phase}</h2>
           </div>
@@ -405,33 +384,25 @@ function Card({ className = "", children }: { className?: string; children: Reac
   return <div className={`rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-sm)] backdrop-blur ${className}`}>{children}</div>;
 }
 
-function EmptyState({ onPickSample }: { onPickSample: () => void }) {
+function EmptyState() {
   return (
     <Card className="p-6 md:p-8">
       <div className="mx-auto max-w-2xl text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--primary-soft)] text-3xl">📄</div>
-        <h2 className="text-lg font-semibold tracking-tight">准备好开始一次 PR 体检</h2>
-        <p className="mt-2 text-sm leading-6 text-[var(--muted-fg)]">输入 PR 链接后，会一次性返回整体总结、风险和可采纳建议。适合作为人工 review 前的第一轮扫雷。</p>
-        <button type="button" onClick={onPickSample} className="mt-5 rounded-full bg-[var(--foreground)] px-4 py-2 text-xs font-semibold text-[var(--background)] transition hover:opacity-85">填入公开样例</button>
-      </div>
-      <div className="mt-8 grid gap-3 md:grid-cols-3">
-        <FeatureCard title="稳定返回" desc="使用 async 接口，避免流式事件中断造成的闪退无结果。" />
-        <FeatureCard title="聚焦风险" desc="只把真正可能影响正确性、性能或安全的问题顶出来。" />
-        <FeatureCard title="可复制报告" desc="完成后一键复制 Markdown，方便贴回 PR 评论。" />
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary-soft)] text-2xl">📄</div>
+        <h2 className="text-lg font-semibold tracking-tight">输入 PR 链接开始评审</h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted-fg)]">
+          系统会返回 PR 总览、潜在风险和修改建议。AI 评审结果仅作为辅助判断，最终仍应由 reviewer 结合项目上下文确认。
+        </p>
       </div>
     </Card>
   );
-}
-
-function FeatureCard({ title, desc }: { title: string; desc: string }) {
-  return <div className="rounded-2xl border border-[var(--border)] bg-[var(--muted)]/35 p-4 text-left"><h3 className="text-sm font-semibold">{title}</h3><p className="mt-2 text-xs leading-5 text-[var(--muted-fg)]">{desc}</p></div>;
 }
 
 function NoIssueCard() {
   return (
     <Card className="border-emerald-500/20 bg-emerald-500/5 p-5 text-center">
       <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-300">未发现需要重点处理的风险</div>
-      <p className="mt-1 text-xs text-[var(--muted-fg)]">这不代表代码绝对无误，但说明当前评审没有产出高价值问题或建议。</p>
+      <p className="mt-1 text-xs text-[var(--muted-fg)]">这不代表代码绝对无误，请结合测试、业务上下文和人工 review 继续判断。</p>
     </Card>
   );
 }
@@ -448,10 +419,6 @@ function CopyMarkdownButton({ report, prUrl }: { report: ReviewReport; prUrl: st
     }
   }
   return <button type="button" onClick={onCopy} className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-xs font-semibold shadow-[var(--shadow-sm)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]">{copied ? "✓ 已复制" : "复制为 Markdown"}</button>;
-}
-
-function HeroPill({ value, label }: { value: string; label: string }) {
-  return <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)]/80 p-3 shadow-[var(--shadow-sm)] backdrop-blur"><div className="text-base font-semibold text-[var(--foreground)]">{value}</div><div className="mt-1 text-[var(--muted-fg)]">{label}</div></div>;
 }
 
 function InlineError({ title, message, className = "" }: { title: string; message: string; className?: string }) {
