@@ -69,7 +69,17 @@ class GitHubClient:
         return self._client
 
     async def _get(self, url: str, **kw: object) -> httpx.Response:
-        res = await self.client.get(url, **kw)  # type: ignore[arg-type]
+        try:
+            res = await self.client.get(url, **kw)  # type: ignore[arg-type]
+        except httpx.ConnectError as e:
+            raise GitHubError(
+                f"无法连接 GitHub API: {url}. "
+                "请检查网络，或通过 GITHUB_API_BASE/GITHUB_RAW_BASE 切换官方地址/镜像地址"
+            ) from e
+        except httpx.TimeoutException as e:
+            raise GitHubError(f"连接 GitHub API 超时: {url}") from e
+        except httpx.HTTPError as e:
+            raise GitHubError(f"访问 GitHub API 失败: {url}: {e}") from e
         if res.status_code == 404:
             raise PRNotFoundError(f"GitHub 资源未找到: {url}")
         if res.status_code == 403 and "rate limit" in res.text.lower():

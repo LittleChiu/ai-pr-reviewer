@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import httpx
 import pytest
 import respx
 from httpx import Response
 
-from app.services.github_client import GitHubClient, PRNotFoundError
+from app.services.github_client import GitHubClient, GitHubError, PRNotFoundError
 from app.services.pr_url import PRRef
 
 
@@ -91,6 +92,18 @@ async def test_fetch_pr_404(ref: PRRef) -> None:
 
     async with GitHubClient() as gh:
         with pytest.raises(PRNotFoundError):
+            await gh.fetch_pr_metadata(ref)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_fetch_pr_connect_error_becomes_github_error(ref: PRRef) -> None:
+    respx.get("https://api.kkgithub.com/repos/LittleChiu/ai-pr-reviewer/pulls/42").mock(
+        side_effect=httpx.ConnectError("connect failed")
+    )
+
+    async with GitHubClient() as gh:
+        with pytest.raises(GitHubError, match="无法连接 GitHub API"):
             await gh.fetch_pr_metadata(ref)
 
 
