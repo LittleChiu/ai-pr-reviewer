@@ -127,3 +127,46 @@ async def test_stream_triage_failure_yields_error() -> None:
     assert "error" in types
     # 出错后不应继续到 done
     assert "done" not in types
+
+
+@pytest.mark.asyncio
+async def test_stream_triage_malformed_json_falls_back_to_done() -> None:
+    deep_a = json.dumps(
+        {
+            "risks": [
+                {
+                    "file": "a.py",
+                    "severity": "medium",
+                    "category": "bug",
+                    "title": "fallback",
+                    "detail": "triage JSON 坏掉后仍继续",
+                    "confidence": "high",
+                }
+            ],
+            "suggestions": [],
+        }
+    )
+    fake = FakeLLM(
+        [
+            '{"summary": "bad"',
+            '{"summary": "still bad"',
+            deep_a,
+        ]
+    )
+
+    events: list[ReviewEvent] = []
+    async for ev in review_pr_layered_stream(
+        _bundle(["a.py"]),
+        ref=PRRef(owner="o", repo="r", number=1),
+        llm=fake,  # type: ignore[arg-type]
+        gh=None,
+        primary_model="P",
+        max_deep_files=1,
+    ):
+        events.append(ev)
+
+    types = [e.type for e in events]
+    assert types[0] == "started"
+    assert "triage" in types
+    assert types[-1] == "done"
+    assert "error" not in types

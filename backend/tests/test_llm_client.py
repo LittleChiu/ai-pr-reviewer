@@ -1,6 +1,8 @@
+from typing import Any
+
 import pytest
 
-from app.services.llm_client import extract_json
+from app.services.llm_client import LLMResponse, chat_json_with_parse_retry, extract_json
 
 
 def test_extract_json_plain() -> None:
@@ -46,3 +48,42 @@ def test_extract_json_control_chars_recovered() -> None:
     d = extract_json(bad)
     assert d["v"] == 1
     assert "a" in d["summary"] and "b" in d["summary"]
+
+
+def test_extract_json_ignores_trailing_broken_braces() -> None:
+    bad = '结果如下:\n{"summary": "ok", "highlights": []}\n补充说明 {not valid json}'
+    d = extract_json(bad)
+    assert d["summary"] == "ok"
+
+
+class FakeLLM:
+    def __init__(self, payloads: list[str]) -> None:
+        self._payloads = list(payloads)
+        self.calls: list[dict[str, Any]] = []
+
+    async def chat_json(self, **kw: Any) -> LLMResponse:
+        self.calls.append(kw)
+        return LLMResponse(content=self._payloads.pop(0), model=kw["model"])
+
+
+@pytest.mark.asyncio
+async def test_chat_json_with_parse_retry_repairs_once() -> None:
+    fake = FakeLLM(
+        [
+            '{"summary": "bad"',
+            '{"summary": "ok", "highlights": []}',
+        ]
+    )
+
+    data, resp = await chat_json_with_parse_retry(
+        fake,  # type: ignore[arg-type]
+        model="m1",
+        system="S",
+        user="U",
+        max_parse_retries=1,
+    )
+
+    assert data["summary"] == "ok"
+    assert resp.usage.llm_calls == 2
+    assert len(fake.calls) == 2
+    assert fake.calls[1]["temperature"] == 0
