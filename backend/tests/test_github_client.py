@@ -71,7 +71,7 @@ async def test_fetch_pr_metadata(ref: PRRef) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_fetch_pr_files(ref: PRRef) -> None:
-    respx.get("https://api.kkgithub.com/repos/LittleChiu/ai-pr-reviewer/pulls/42/files").mock(
+    respx.get("https://api.github.com/repos/LittleChiu/ai-pr-reviewer/pulls/42/files").mock(
         return_value=Response(200, json=_FILES_JSON)
     )
 
@@ -113,4 +113,4 @@ async def test_fetch_pr_bundle(ref: PRRef) -> None:
     respx.get("https://api.github.com/repos/LittleChiu/ai-pr-reviewer/pulls/42").mock(
         side_effect=[
             Response(200, json=_PR_JSON),
-            Response(200, text="di
+            Response(200, text="diff
