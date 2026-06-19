@@ -16,7 +16,7 @@ jobs:
     name: Backend (Python / FastAPI)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Skip if backend not yet present
         id: check
@@ -60,7 +60,7 @@ jobs:
     name: Frontend (Next.js)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Skip if frontend not yet present
         id: check
