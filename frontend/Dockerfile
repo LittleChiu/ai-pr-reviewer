@@ -1,13 +1,13 @@
 # Frontend Dockerfile (only needed if you want to self-host the frontend
 # instead of using Vercel; preferred deployment is Vercel).
 
-FROM node:22-alpine AS deps
+FROM node:25-alpine AS deps
 WORKDIR /app
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN corepack enable && corepack prepare pnpm@10.34.1 --activate
 RUN pnpm install --frozen-lockfile
 
-FROM node:22-alpine AS builder
+FROM node:25-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY frontend/ .
@@ -15,7 +15,7 @@ RUN corepack enable && corepack prepare pnpm@10.34.1 --activate
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
-FROM node:22-alpine AS runner
+FROM node:25-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
 RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
